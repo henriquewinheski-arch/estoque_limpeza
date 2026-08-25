@@ -815,7 +815,10 @@ function irPara(pg, el) {
   document.getElementById('page-' + pg).classList.add('active');
   el.classList.add('active');
   if(pg === 'abc') carregarAbc();
-  if(pg === 'historico') carregarHistorico();
+  if(pg === 'historico') {
+    if(todosItens.length === 0) { carregarItens().then(carregarHistorico); }
+    else carregarHistorico();
+  }
 }
 
 var todosMovimentos = [];
@@ -843,19 +846,24 @@ function renderHistorico(lista) {
     var tipo = (m.tipo || '').toLowerCase();
     var origem = (m.origem || 'manual').toLowerCase();
     var ico = tipo === 'entrada' ? '📥' : (origem === 'voz' ? '🎤' : '📤');
-    var d = m.createdAt ? new Date(m.createdAt) : null;
-    var dataStr = d ? d.toLocaleDateString('pt-BR', {day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'}) : '—';
+    var d = m.createdAt || m.created_at;
+    var dataObj = d ? new Date(d) : null;
+    var dataStr = dataObj ? dataObj.toLocaleDateString('pt-BR', {day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'}) : '—';
+    // Cruzar item_id com catálogo para obter nome
+    var itemInfo = todosItens.find(function(i){ return i.item_id === m.item_id; });
+    var nomeItem = itemInfo ? itemInfo.nome : (m.item_nome || m.item_id || '—');
+    var unidade = itemInfo ? itemInfo.unidade : (m.unidade || 'un');
     var card = document.createElement('div');
     card.className = 'hist-item';
     card.innerHTML =
       '<div class="hist-ico ' + tipo + '">' + ico + '</div>' +
       '<div class="hist-inf">' +
-        '<div class="hist-nome">' + (m.item_nome || m.item_id || '—') + '</div>' +
+        '<div class="hist-nome">' + nomeItem + '</div>' +
         '<div class="hist-meta">' + dataStr + ' · ' + (m.usuario || '—') + (m.observacao ? ' · ' + m.observacao : '') + '</div>' +
       '</div>' +
       '<div class="hist-qty">' +
         '<div class="hist-num ' + tipo + '">' + (tipo === 'entrada' ? '+' : '-') + (m.quantidade || '?') + '</div>' +
-        '<div class="hist-unit">' + (m.unidade || 'un') + '</div>' +
+        '<div class="hist-unit">' + unidade + '</div>' +
       '</div>';
     cont.appendChild(card);
   });

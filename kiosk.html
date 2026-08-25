@@ -943,14 +943,16 @@ function renderHistoricoKiosk(lista) {
   lista.forEach(function(m) {
     var tipo = (m.tipo || '').toLowerCase();
     var ico = tipo === 'entrada' ? '📥' : '📤';
-    var d = m.createdAt ? new Date(m.createdAt) : null;
+    var d = m.createdAt || m.created_at; var dataObjK = d ? new Date(d) : null; d = dataObjK;
     var dataStr = d ? d.toLocaleDateString('pt-BR', {day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'}) : '—';
+    var itemInfoK = todosItens.find(function(i){ return i.item_id === m.item_id; });
+    var nomeItemK = itemInfoK ? itemInfoK.nome : (m.item_nome || m.item_id || '—');
     var card = document.createElement('div');
     card.className = 'hist-item';
     card.innerHTML =
       '<div class="hist-ico ' + tipo + '">' + ico + '</div>' +
       '<div class="hist-inf">' +
-        '<div class="hist-nome">' + (m.item_nome || m.item_id || '—') + '</div>' +
+        '<div class="hist-nome">' + nomeItemK + '</div>' +
         '<div class="hist-meta">' + dataStr + ' · ' + (m.usuario || '—') + '</div>' +
       '</div>' +
       '<div class="hist-qty">' +
