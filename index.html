@@ -366,7 +366,7 @@ let userName = '';
 
 function logout() {
   if(!confirm('Sair?')) return;
-  sessionStorage.clear();
+  localStorage.removeItem('lx_tok');
   location.reload();
 }
 
@@ -381,7 +381,8 @@ async function carregarItens() {
   document.getElementById('lista-itens').innerHTML = '<div class="spin-wrap"><div class="spin"></div><span>Carregando...</span></div>';
   try {
     const data = await api('/limpeza-itens');
-    todosItens = Array.isArray(data) ? data.filter(function(i){ return i.ativo !== 'false'; }) : [];
+    var raw = Array.isArray(data) ? data : (data && data.item_id ? [data] : []);
+    todosItens = raw.filter(function(i){ return i.ativo !== 'false'; });
   } catch(e) {
     todosItens = [];
   }
@@ -804,12 +805,13 @@ function toast(msg, tipo) {
   }
 
   function salvarSessao(idToken, payload){
-    // Sessão não é salva — sempre pede login
+    localStorage.setItem('lx_tok', idToken);
+    localStorage.setItem('lx_tok_exp', payload.exp);
   }
 
   function limparSessaoSalva(){
-    localStorage.removeItem("limpeza_id_token");
-    localStorage.removeItem("limpeza_id_token_exp");
+    localStorage.removeItem("lx_tok");
+    ;
   }
 
   function mostrarProcessandoLogin(){
@@ -844,7 +846,20 @@ function toast(msg, tipo) {
   }
 
   window.addEventListener("load", async function(){
-    limparSessaoSalva();
+    // Verificar sessão salva primeiro
+    var savedToken = localStorage.getItem('lx_tok');
+    var savedExp = localStorage.getItem('lx_tok_exp');
+    if (savedToken && savedExp && (Date.now() / 1000) < Number(savedExp)) {
+      try {
+        var payload = decodeJwt(savedToken);
+        if (payload.email && payload.email.endsWith('@logcomex.com')) {
+          concluirLogin(savedToken, payload);
+          return;
+        }
+      } catch(e) {}
+    }
+    localStorage.removeItem('lx_tok');
+    localStorage.removeItem('lx_tok_exp');
     const veioDoLogin = await processarLoginCallback();
     if (veioDoLogin) return;
     document.getElementById("loginGate").classList.add("show");
