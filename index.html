@@ -259,7 +259,7 @@ html,body{height:100%;font-family:var(--lx-font-body);background:var(--lx-off-wh
         <div class="kcard purple"><div class="k-eye">Total</div><div class="k-val" id="kpi-t">—</div><div class="k-sub">itens cadastrados</div></div>
       </div>
       <div class="sbar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><input type="text" id="search-input" placeholder="Buscar produto..." oninput="filtrarItens()"></div>
-      <div class="chips" id="chips-container"><div class="chip active" onclick="setChip('todos',this)">Todos</div><div class="chip" onclick="setChip('alerta',this)">⚠ Alerta</div></div>
+      <div class="chips" id="chips-container"><div class="chip active" id="chip-todos-static">Todos</div><div class="chip" id="chip-alerta-static">⚠ Alerta</div></div>
       <div class="sh"><span class="sh-t">Estoque</span><span class="sh-c" id="item-count">0</span></div>
       <div id="lista-itens"><div class="spin-wrap"><div class="spin"></div><span>Carregando...</span></div></div>
     </div>
@@ -797,6 +797,14 @@ function toast(msg, tipo) {
     document.getElementById("loginGate").classList.add("show");
   });
 </script>
+
+// Inicializar chips estáticos
+document.addEventListener('DOMContentLoaded', function() {
+  var ct = document.getElementById('chip-todos');
+  if(ct) ct.onclick = function(){ setChip('todos', ct); };
+  var ca = document.getElementById('chip-alerta');
+  if(ca) ca.onclick = function(){ setChip('alerta', ca); };
+});
 </script>
 </body>
 </html>
