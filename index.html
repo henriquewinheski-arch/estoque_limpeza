@@ -278,6 +278,37 @@ html,body{height:100%;font-family:var(--lx-font-body);background:var(--lx-off-wh
 .bm-v-destaque:active { transform: scale(0.98); box-shadow: 0 2px 10px rgba(102,19,208,0.3); }
 .bm-v-destaque svg { width: 24px; height: 24px; stroke-width: 2; }
 
+
+/* ── HISTÓRICO ── */
+.hist-item {
+  background: #fff;
+  border-radius: 14px;
+  padding: 14px 16px;
+  margin-bottom: 8px;
+  border: 1px solid var(--lx-border);
+  box-shadow: var(--lx-shadow-sm);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.hist-ico {
+  width: 38px; height: 38px;
+  border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 16px; flex-shrink: 0;
+}
+.hist-ico.entrada { background: rgba(31,172,102,.1); }
+.hist-ico.saida   { background: rgba(199,4,4,.07); }
+.hist-ico.voz     { background: rgba(102,19,208,.08); }
+.hist-inf { flex: 1; min-width: 0; }
+.hist-nome { font-size: 13px; font-weight: 600; color: var(--lx-fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hist-meta { font-size: 11px; color: var(--lx-fg-muted); margin-top: 2px; }
+.hist-qty { text-align: right; flex-shrink: 0; }
+.hist-num { font-size: 20px; font-weight: 700; line-height: 1; }
+.hist-num.entrada { color: var(--chip-green-fg); }
+.hist-num.saida   { color: var(--chip-red-fg); }
+.hist-unit { font-size: 10px; color: var(--lx-fg-muted); font-weight: 500; }
+
 </style>
 </head>
 <body>
@@ -356,10 +387,16 @@ html,body{height:100%;font-family:var(--lx-font-body);background:var(--lx-off-wh
       </div>
       <div id="qr-result" style="display:none"><div class="qr-wrap"><canvas id="qr-canvas"></canvas><p class="qr-url" id="qr-url-txt"></p><button class="btn-dqr" onclick="downloadQr()">Baixar etiqueta QR</button></div></div>
     </div>
+
+    <div class="page" id="page-historico">
+      <div class="sh" style="margin-bottom:16px"><span class="sh-t">Histórico</span><button class="chip" onclick="carregarHistorico()">&#8635; Atualizar</button></div>
+      <div id="lista-historico"><div class="spin-wrap"><div class="spin"></div><span>Carregando...</span></div></div>
+    </div>
   </div>
   <nav class="bottom-nav">
     <button class="ni active" onclick="irPara('estoque',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg><span class="ni-label">Estoque</span></button>
     <button class="ni" onclick="irPara('abc',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg><span class="ni-label">Curva ABC</span></button>
+    <button class="ni" onclick="irPara('historico',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="12 8 12 12 14 14"/><circle cx="12" cy="12" r="10"/></svg><span class="ni-label">Histórico</span></button>
     <button class="ni" onclick="irPara('cadastro',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg><span class="ni-label">Cadastrar</span></button>
   </nav>
 </div>
@@ -778,6 +815,50 @@ function irPara(pg, el) {
   document.getElementById('page-' + pg).classList.add('active');
   el.classList.add('active');
   if(pg === 'abc') carregarAbc();
+  if(pg === 'historico') carregarHistorico();
+}
+
+var todosMovimentos = [];
+
+async function carregarHistorico() {
+  document.getElementById('lista-historico').innerHTML = '<div class="spin-wrap"><div class="spin"></div><span>Carregando...</span></div>';
+  try {
+    var data = await api('/limpeza-movimentos');
+    var raw = Array.isArray(data) ? data : (data && data.mov_id ? [data] : []);
+    todosMovimentos = raw;
+    renderHistorico(raw);
+  } catch(e) {
+    document.getElementById('lista-historico').innerHTML = '<div class="empty"><div class="et">Erro ao carregar</div></div>';
+  }
+}
+
+function renderHistorico(lista) {
+  if (!lista.length) {
+    document.getElementById('lista-historico').innerHTML = '<div class="empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><polyline points="12 8 12 12 14 14"/></svg><div class="et">Nenhum movimento ainda</div><div class="es">Registre entradas e saídas</div></div>';
+    return;
+  }
+  var cont = document.getElementById('lista-historico');
+  cont.innerHTML = '';
+  lista.forEach(function(m) {
+    var tipo = (m.tipo || '').toLowerCase();
+    var origem = (m.origem || 'manual').toLowerCase();
+    var ico = tipo === 'entrada' ? '📥' : (origem === 'voz' ? '🎤' : '📤');
+    var d = m.createdAt ? new Date(m.createdAt) : null;
+    var dataStr = d ? d.toLocaleDateString('pt-BR', {day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'}) : '—';
+    var card = document.createElement('div');
+    card.className = 'hist-item';
+    card.innerHTML =
+      '<div class="hist-ico ' + tipo + '">' + ico + '</div>' +
+      '<div class="hist-inf">' +
+        '<div class="hist-nome">' + (m.item_nome || m.item_id || '—') + '</div>' +
+        '<div class="hist-meta">' + dataStr + ' · ' + (m.usuario || '—') + (m.observacao ? ' · ' + m.observacao : '') + '</div>' +
+      '</div>' +
+      '<div class="hist-qty">' +
+        '<div class="hist-num ' + tipo + '">' + (tipo === 'entrada' ? '+' : '-') + (m.quantidade || '?') + '</div>' +
+        '<div class="hist-unit">' + (m.unidade || 'un') + '</div>' +
+      '</div>';
+    cont.appendChild(card);
+  });
 }
 
 function fmtBR(n) { return Number(n).toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2}); }
