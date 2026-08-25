@@ -422,15 +422,26 @@ function renderLista(lista) {
     document.getElementById('lista-itens').innerHTML = '<div class="empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg><div class="et">Nenhum item encontrado</div><div class="es">Tente outro filtro</div></div>';
     return;
   }
-  document.getElementById('lista-itens').innerHTML = lista.map(function(item) {
-    const baixo = Number(item.saldo_atual) <= Number(item.estoque_minimo);
-    const itemJson = JSON.stringify(item).replace(/'/g, "&#39;");
-    return '<div class="icard ' + (baixo?'alerta':'') + '" onclick='abrirModal(' + itemJson + ')'>' +
-      '<div class="iico">' + (EMOJI[item.categoria]||'&#128230;') + '</div>' +
-      '<div class="iinf"><div class="inome">' + (item.nome||'-') + '</div><div class="icat">' + (item.categoria||'') + '</div>' + (baixo?'<div class="ibadge">&#9888; Abaixo do minimo</div>':'') + '</div>' +
-      '<div class="isaldo-col"><div class="isaldo ' + (baixo?'baixo':'') + '">' + (item.saldo_atual!=null?item.saldo_atual:'-') + '</div><div class="iunit">' + (item.unidade||'') + '</div></div>' +
+  var container = document.getElementById('lista-itens');
+  container.innerHTML = '';
+  lista.forEach(function(item) {
+    var baixo = Number(item.saldo_atual) <= Number(item.estoque_minimo);
+    var card = document.createElement('div');
+    card.className = 'icard' + (baixo ? ' alerta' : '');
+    card.onclick = function() { abrirModal(item); };
+    card.innerHTML =
+      '<div class="iico">' + (EMOJI[item.categoria]||'[.]') + '</div>' +
+      '<div class="iinf">' +
+        '<div class="inome">' + (item.nome||'-') + '</div>' +
+        '<div class="icat">' + (item.categoria||'') + '</div>' +
+        (baixo ? '<div class="ibadge">! Abaixo do minimo</div>' : '') +
+      '</div>' +
+      '<div class="isaldo-col">' +
+        '<div class="isaldo' + (baixo ? ' baixo' : '') + '">' + (item.saldo_atual!=null?item.saldo_atual:'-') + '</div>' +
+        '<div class="iunit">' + (item.unidade||'') + '</div>' +
       '</div>';
-  }).join('');
+    container.appendChild(card);
+  })
 }
 
 function abrirModal(item) {
@@ -656,6 +667,7 @@ function toast(msg, tipo) {
   setTimeout(function(){ t.className = 'toast'; }, 3000);
 }
 
+</script>
 <script>
 // ---- Login com Google (Authorization Code flow — troca do código feita no backend n8n) ----
   const CLIENT_ID = "161510977968-oofrl3c78ijlt6t146lm35sdltdr4tdv.apps.googleusercontent.com";
@@ -796,15 +808,6 @@ function toast(msg, tipo) {
     if (veioDoLogin) return;
     document.getElementById("loginGate").classList.add("show");
   });
-</script>
-
-// Inicializar chips estáticos
-document.addEventListener('DOMContentLoaded', function() {
-  var ct = document.getElementById('chip-todos');
-  if(ct) ct.onclick = function(){ setChip('todos', ct); };
-  var ca = document.getElementById('chip-alerta');
-  if(ca) ca.onclick = function(){ setChip('alerta', ca); };
-});
 </script>
 </body>
 </html>
