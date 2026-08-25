@@ -796,7 +796,7 @@ async function processarAudio() {
   reader.onloadend = async function() {
     var b64 = reader.result.split(',')[1];
     try {
-      var r = await api('/limpeza-voz', { method: 'POST', body: JSON.stringify({ audio: b64, item_id: itemSel.item_id, item_nome: itemSel.nome, usuario: usuarioAtual ? usuarioAtual.email : '' }) });
+      var r = await api('/limpeza-voz', { method: 'POST', body: JSON.stringify({ audio: b64, item_id: itemSel.item_id, item_nome: itemSel.nome, usuario: usuarioAtual ? usuarioAtual.email : '', catalogo: todosItens.map(function(i){ return i.item_id + '|' + i.nome; }).join('\n') }) });
       if (r.ok && r.intencao) {
         vozParsed = r.intencao;
         var tr = document.getElementById('voz-transcript');
@@ -934,18 +934,26 @@ async function processarVozGlobal() {
       })});
       if (r.ok && r.intencao) {
         vozGlobalParsed = r.intencao;
-        // Tentar encontrar o item no estoque
+        // Usar item_id retornado pelo n8n diretamente
         var itemEncontrado = null;
-        if (r.intencao.item_id) {
+        if (r.item_id) {
+          itemEncontrado = todosItens.find(function(i){ return i.item_id === r.item_id; });
+        }
+        if (!itemEncontrado && r.intencao.item_id) {
           itemEncontrado = todosItens.find(function(i){ return i.item_id === r.intencao.item_id; });
         }
-        if (!itemEncontrado && r.intencao.item_nome) {
-          var nome = (r.intencao.item_nome || '').toLowerCase();
+        if (!itemEncontrado && r.item_nome) {
+          var nome = r.item_nome.toLowerCase();
           itemEncontrado = todosItens.find(function(i){
-            return (i.nome || '').toLowerCase().indexOf(nome) >= 0 || nome.indexOf((i.nome || '').toLowerCase()) >= 0;
+            return (i.nome || '').toLowerCase().indexOf(nome) >= 0;
           });
         }
         vozGlobalParsed.itemEncontrado = itemEncontrado;
+        // Guardar item_id do n8n mesmo se nao encontrou em todosItens
+        if (!itemEncontrado && r.item_id) {
+          vozGlobalParsed.itemEncontrado = { item_id: r.item_id, nome: r.item_nome, unidade: '' };
+          itemEncontrado = vozGlobalParsed.itemEncontrado;
+        }
         var tr = document.getElementById('voz-global-transcript');
         tr.textContent = '"' + (r.transcricao || '') + '"';
         tr.style.display = 'block';
