@@ -202,145 +202,6 @@ html,body{height:100%;font-family:var(--lx-font-body);background:var(--lx-off-wh
 </style>
 </head>
 <body>
-<script>
-// ---- Login com Google (Authorization Code flow — troca do código feita no backend n8n) ----
-  const CLIENT_ID = "161510977968-oofrl3c78ijlt6t146lm35sdltdr4tdv.apps.googleusercontent.com";
-  const DOMINIO_ESPERADO = "logcomex.com";
-  const CONSULTA_URL = "https://ramonlogcomex.app.n8n.cloud/webhook/brindes-consulta";
-  const SCAN_URL = "https://ramonlogcomex.app.n8n.cloud/webhook/brindes-scan";
-  const VOZ_URL = "https://ramonlogcomex.app.n8n.cloud/webhook/brindes-voz";
-  const TRANSFER_URL = "https://ramonlogcomex.app.n8n.cloud/webhook/brindes-transferir";
-  const OAUTH_EXCHANGE_URL = "https://ramonlogcomex.app.n8n.cloud/webhook/limpeza-oauth-exchange";
-  const REDIRECT_URI = window.location.origin + window.location.pathname;
-  let currentIdToken = null;
-
-  function iniciarLoginGoogle(){
-    const state = Math.random().toString(36).slice(2) + Date.now().toString(36);
-    sessionStorage.setItem("oauth_state", state);
-    const params = new URLSearchParams({
-      client_id: CLIENT_ID,
-      redirect_uri: REDIRECT_URI,
-      response_type: "code",
-      scope: "openid email profile",
-      state: state,
-      hd: DOMINIO_ESPERADO,
-      prompt: "select_account",
-      access_type: "online"
-    });
-    window.location.href = "https://accounts.google.com/o/oauth2/v2/auth?" + params.toString();
-  }
-
-  function decodeJwt(token){
-    const base64 = token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/");
-    return JSON.parse(decodeURIComponent(atob(base64).split("").map(c =>
-      "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2)).join("")));
-  }
-
-  async function processarLoginCallback(){
-    const searchParams = new URLSearchParams(window.location.search);
-    const code = searchParams.get("code");
-    const state = searchParams.get("state");
-    const erroOauth = searchParams.get("error");
-
-    if (!code && !erroOauth) return false;
-
-    // Limpa a query da URL imediatamente pra não deixar o código exposto/reprocessável
-    history.replaceState(null, "", window.location.pathname);
-
-    if (erroOauth) {
-      // login_required/interaction_required/consent_required acontecem quando a tentativa
-      // silenciosa (pularVideo automático) não encontra sessão do Google ativa no aparelho —
-      // não é um erro real do usuário, só mostra a tela de login normal pra ele entrar uma vez.
-      const erroSilenciosoEsperado = ["login_required", "interaction_required", "consent_required"].includes(erroOauth);
-      if (!erroSilenciosoEsperado) {
-        mostrarErroLogin("Login cancelado ou negado pelo Google (" + erroOauth + ").");
-      } else {
-        document.getElementById("loginGate").classList.add("show");
-      }
-      return true;
-    }
-
-    const stateEsperado = sessionStorage.getItem("oauth_state");
-    sessionStorage.removeItem("oauth_state");
-    if (state !== stateEsperado) {
-      mostrarErroLogin("Falha de segurança na validação do login (state). Tente novamente.");
-      return true;
-    }
-
-    const eraTentativaSilenciosa = sessionStorage.getItem("oauth_silencioso") === "1";
-    sessionStorage.removeItem("oauth_silencioso");
-    if (!eraTentativaSilenciosa) mostrarProcessandoLogin();
-
-    try {
-      const res = await fetch(OAUTH_EXCHANGE_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code: code, redirectUri: REDIRECT_URI })
-      });
-      const resultado = await res.json();
-      if (!resultado.ok) {
-        mostrarErroLogin("Não foi possível concluir o login: " + (resultado.erro || "erro desconhecido") + ".");
-        return true;
-      }
-      const payload = decodeJwt(resultado.id_token);
-      if (payload.hd !== DOMINIO_ESPERADO) {
-        mostrarErroLogin("Apenas contas @" + DOMINIO_ESPERADO + " podem acessar este painel.");
-        return true;
-      }
-      salvarSessao(resultado.id_token, payload);
-      concluirLogin(resultado.id_token, payload);
-    } catch (e) {
-      console.error("Falha na troca do código OAuth:", e);
-      mostrarErroLogin("Erro de conexão ao concluir o login. Tente novamente.");
-    }
-    return true;
-  }
-
-  function salvarSessao(idToken, payload){
-    // Sessão não é salva — sempre pede login
-  }
-
-  function limparSessaoSalva(){
-    localStorage.removeItem("brindes_id_token");
-    localStorage.removeItem("brindes_id_token_exp");
-  }
-
-  function mostrarProcessandoLogin(){
-    document.getElementById("loginGate").classList.add("show");
-    const btn = document.getElementById("lgGoogleBtn");
-    if (btn) btn.innerHTML = "Concluindo login...";
-  }
-
-  function mostrarErroLogin(msg){
-    document.getElementById("loginGate").classList.add("show");
-    const errEl = document.getElementById("lgErr");
-    errEl.textContent = msg;
-    errEl.classList.add("show");
-  }
-
-  function concluirLogin(idToken, payload){
-    document.getElementById("loginGate").classList.remove("show");
-    document.getElementById("screen-app").style.display = "flex";
-    currentIdToken = idToken;
-    userEmail = payload.email;
-    userName = payload.name;
-    document.getElementById("user-avatar").textContent = payload.name ? payload.name[0].toUpperCase() : "?";
-    const itemParam = new URLSearchParams(window.location.search).get("item");
-    carregarItens().then(() => {
-      if (itemParam) {
-        const item = todosItens.find(i => i.item_id === itemParam);
-        if (item) abrirModal(item);
-      }
-    });
-  }
-
-  window.addEventListener("load", async function(){
-    limparSessaoSalva();
-    const veioDoLogin = await processarLoginCallback();
-    if (veioDoLogin) return;
-    document.getElementById("loginGate").classList.add("show");
-  });
-</script>
 <div id="loginGate">
   <div class="lg-hero">
     <div class="brand">
@@ -787,6 +648,148 @@ function toast(msg, tipo) {
   t.className = 'toast show' + (tipo ? ' ' + tipo : '');
   setTimeout(function(){ t.className = 'toast'; }, 3000);
 }
+
+<script>
+// ---- Login com Google (Authorization Code flow — troca do código feita no backend n8n) ----
+  const CLIENT_ID = "161510977968-oofrl3c78ijlt6t146lm35sdltdr4tdv.apps.googleusercontent.com";
+  const DOMINIO_ESPERADO = "logcomex.com";
+  const CONSULTA_URL = "https://ramonlogcomex.app.n8n.cloud/webhook/brindes-consulta";
+  const SCAN_URL = "https://ramonlogcomex.app.n8n.cloud/webhook/brindes-scan";
+  const VOZ_URL = "https://ramonlogcomex.app.n8n.cloud/webhook/brindes-voz";
+  const TRANSFER_URL = "https://ramonlogcomex.app.n8n.cloud/webhook/brindes-transferir";
+  const OAUTH_EXCHANGE_URL = "https://ramonlogcomex.app.n8n.cloud/webhook/limpeza-oauth-exchange";
+  const REDIRECT_URI = window.location.origin + window.location.pathname;
+  let currentIdToken = null;
+
+  function iniciarLoginGoogle(){
+    const state = Math.random().toString(36).slice(2) + Date.now().toString(36);
+    sessionStorage.setItem("oauth_state", state);
+    const params = new URLSearchParams({
+      client_id: CLIENT_ID,
+      redirect_uri: REDIRECT_URI,
+      response_type: "code",
+      scope: "openid email profile",
+      state: state,
+      hd: DOMINIO_ESPERADO,
+      prompt: "select_account",
+      access_type: "online"
+    });
+    window.location.href = "https://accounts.google.com/o/oauth2/v2/auth?" + params.toString();
+  }
+
+  function decodeJwt(token){
+    const base64 = token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/");
+    return JSON.parse(decodeURIComponent(atob(base64).split("").map(c =>
+      "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2)).join("")));
+  }
+
+  async function processarLoginCallback(){
+    const searchParams = new URLSearchParams(window.location.search);
+    const code = searchParams.get("code");
+    const state = searchParams.get("state");
+    const erroOauth = searchParams.get("error");
+
+    if (!code && !erroOauth) return false;
+
+    // Limpa a query da URL imediatamente pra não deixar o código exposto/reprocessável
+    history.replaceState(null, "", window.location.pathname);
+
+    if (erroOauth) {
+      // login_required/interaction_required/consent_required acontecem quando a tentativa
+      // silenciosa (pularVideo automático) não encontra sessão do Google ativa no aparelho —
+      // não é um erro real do usuário, só mostra a tela de login normal pra ele entrar uma vez.
+      const erroSilenciosoEsperado = ["login_required", "interaction_required", "consent_required"].includes(erroOauth);
+      if (!erroSilenciosoEsperado) {
+        mostrarErroLogin("Login cancelado ou negado pelo Google (" + erroOauth + ").");
+      } else {
+        document.getElementById("loginGate").classList.add("show");
+      }
+      return true;
+    }
+
+    const stateEsperado = sessionStorage.getItem("oauth_state");
+    sessionStorage.removeItem("oauth_state");
+    if (state !== stateEsperado) {
+      mostrarErroLogin("Falha de segurança na validação do login (state). Tente novamente.");
+      return true;
+    }
+
+    const eraTentativaSilenciosa = sessionStorage.getItem("oauth_silencioso") === "1";
+    sessionStorage.removeItem("oauth_silencioso");
+    if (!eraTentativaSilenciosa) mostrarProcessandoLogin();
+
+    try {
+      const res = await fetch(OAUTH_EXCHANGE_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code: code, redirectUri: REDIRECT_URI })
+      });
+      const resultado = await res.json();
+      if (!resultado.ok) {
+        mostrarErroLogin("Não foi possível concluir o login: " + (resultado.erro || "erro desconhecido") + ".");
+        return true;
+      }
+      const payload = decodeJwt(resultado.id_token);
+      if (payload.hd !== DOMINIO_ESPERADO) {
+        mostrarErroLogin("Apenas contas @" + DOMINIO_ESPERADO + " podem acessar este painel.");
+        return true;
+      }
+      salvarSessao(resultado.id_token, payload);
+      concluirLogin(resultado.id_token, payload);
+    } catch (e) {
+      console.error("Falha na troca do código OAuth:", e);
+      mostrarErroLogin("Erro de conexão ao concluir o login. Tente novamente.");
+    }
+    return true;
+  }
+
+  function salvarSessao(idToken, payload){
+    // Sessão não é salva — sempre pede login
+  }
+
+  function limparSessaoSalva(){
+    localStorage.removeItem("brindes_id_token");
+    localStorage.removeItem("brindes_id_token_exp");
+  }
+
+  function mostrarProcessandoLogin(){
+    document.getElementById("loginGate").classList.add("show");
+    const btn = document.getElementById("lgGoogleBtn");
+    if (btn) btn.innerHTML = "Concluindo login...";
+  }
+
+  function mostrarErroLogin(msg){
+    document.getElementById("loginGate").classList.add("show");
+    const errEl = document.getElementById("lgErr");
+    errEl.textContent = msg;
+    errEl.classList.add("show");
+  }
+
+  function concluirLogin(idToken, payload){
+    document.getElementById("loginGate").classList.remove("show");
+    document.getElementById("screen-app").style.display = "flex";
+    currentIdToken = idToken;
+    userEmail = payload.email;
+    userName = payload.name;
+    document.getElementById("user-avatar").textContent = payload.name ? payload.name[0].toUpperCase() : "?";
+    const itemParam = new URLSearchParams(window.location.search).get("item");
+    setTimeout(function() {
+      carregarItens().then(function() {
+        if (itemParam) {
+          const item = todosItens.find(function(i){ return i.item_id === itemParam; });
+          if (item) abrirModal(item);
+        }
+      });
+    }, 100);
+  }
+
+  window.addEventListener("load", async function(){
+    limparSessaoSalva();
+    const veioDoLogin = await processarLoginCallback();
+    if (veioDoLogin) return;
+    document.getElementById("loginGate").classList.add("show");
+  });
+</script>
 </script>
 </body>
 </html>
