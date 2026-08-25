@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <title>Estoque de Limpeza — Facilities · Logcomex</title>
 <link href="https://fonts.googleapis.com/css2?family=Funnel+Display:wght@500;600;700&family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
 <style>
 :root{
   --lx-primary-darkest:#2D085D;--lx-primary-pure:#6613D0;--lx-primary-light:#8E44ED;
@@ -223,7 +223,7 @@ html,body{height:100%;font-family:var(--lx-font-body);background:var(--lx-off-wh
       <path d="M5.10529 6.64643L0 11.7254V18.0891C0 20.8816 2.27851 23.1467 5.08749 23.1467H11.4887L16.594 18.0714H5.10529V6.64643Z" fill="#fff"></path>
       <path d="M17.2311 6.01289V17.4343L22.3364 12.3589V0.9375H10.8513L5.746 6.01289H17.2311Z" fill="#FE8F1C"></path>
       </svg>
-      <span class="lg-tag">Controle de brindes · Interno</span>
+      <span class="lg-tag">ESTOQUE DE LIMPEZA · FACILITIES</span>
     </div>
     <span class="lg-sparkle" style="top:18%;right:14%;"><svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor"><path d="M12 1.5c.2 2.9 2.4 5.1 5.3 5.3.1 0 .1.2 0 .2-2.9.2-5.1 2.4-5.3 5.3 0 .1-.2.1-.2 0C11.6 9.4 9.4 7.2 6.5 7c-.1 0-.1-.2 0-.2C9.4 6.6 11.6 4.4 11.8 1.5c0-.1.2-.1.2 0z"/></svg></span>
     <h2>Sabemos o que <span class="accent">limpa o escritório.</span> E quanto tem.</h2>
@@ -667,7 +667,7 @@ function downloadQr() {
   const c = document.getElementById('qr-canvas');
   const a = document.createElement('a');
   a.download = 'qr-etiqueta.png';
-  a.href = c.toDataURL(); a.click();
+  a.href = c.toDataURL('image/png'); a.click();
 }
 
 function irPara(pg, el) {
@@ -693,10 +693,10 @@ function toast(msg, tipo) {
 // ---- Login com Google (Authorization Code flow — troca do código feita no backend n8n) ----
   const CLIENT_ID = "161510977968-oofrl3c78ijlt6t146lm35sdltdr4tdv.apps.googleusercontent.com";
   const DOMINIO_ESPERADO = "logcomex.com";
-  const CONSULTA_URL = "https://ramonlogcomex.app.n8n.cloud/webhook/brindes-consulta";
-  const SCAN_URL = "https://ramonlogcomex.app.n8n.cloud/webhook/brindes-scan";
-  const VOZ_URL = "https://ramonlogcomex.app.n8n.cloud/webhook/brindes-voz";
-  const TRANSFER_URL = "https://ramonlogcomex.app.n8n.cloud/webhook/brindes-transferir";
+  const CONSULTA_URL = "https://ramonlogcomex.app.n8n.cloud/webhook/limpeza-itens";
+  const SCAN_URL = "https://ramonlogcomex.app.n8n.cloud/webhook/limpeza-item";
+  const VOZ_URL = "https://ramonlogcomex.app.n8n.cloud/webhook/limpeza-voz";
+  const TRANSFER_URL = "";
   const OAUTH_EXCHANGE_URL = "https://ramonlogcomex.app.n8n.cloud/webhook/limpeza-oauth-exchange";
   const REDIRECT_URI = window.location.origin + window.location.pathname;
   let currentIdToken = null;
@@ -788,8 +788,8 @@ function toast(msg, tipo) {
   }
 
   function limparSessaoSalva(){
-    localStorage.removeItem("brindes_id_token");
-    localStorage.removeItem("brindes_id_token_exp");
+    localStorage.removeItem("limpeza_id_token");
+    localStorage.removeItem("limpeza_id_token_exp");
   }
 
   function mostrarProcessandoLogin(){
