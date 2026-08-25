@@ -368,13 +368,20 @@ async function carregarItens() {
 }
 
 function renderChips() {
-  const cats = todosItens.map(function(i){ return i.categoria; }).filter(Boolean).filter(function(v,i,a){ return a.indexOf(v)===i; });
-  document.getElementById('chips-container').innerHTML =
-    '<div class="chip active" onclick="setChip('todos',this)">Todos</div>' +
-    '<div class="chip" onclick="setChip('alerta',this)">&#9888; Alerta</div>' +
-    cats.map(function(c){ return '<div class="chip" onclick="setChip('' + c + '',this)">' + c + '</div>'; }).join('');
+  var cats = todosItens.map(function(i){ return i.categoria; }).filter(Boolean).filter(function(v,i,a){ return a.indexOf(v)===i; });
+  var cont = document.getElementById('chips-container');
+  cont.innerHTML = '';
+  function makeChip(label, filtro) {
+    var d = document.createElement('div');
+    d.className = 'chip' + (filtro === 'todos' ? ' active' : '');
+    d.textContent = label;
+    d.onclick = function() { setChip(filtro, d); };
+    return d;
+  }
+  cont.appendChild(makeChip('Todos', 'todos'));
+  cont.appendChild(makeChip('Alerta', 'alerta'));
+  cats.forEach(function(c) { cont.appendChild(makeChip(c, c)); });
 }
-
 function renderKpis() {
   document.getElementById('kpi-a').textContent = todosItens.filter(function(i){ return Number(i.saldo_atual)<=Number(i.estoque_minimo); }).length;
   document.getElementById('kpi-t').textContent = todosItens.length;
