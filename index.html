@@ -532,7 +532,8 @@ function filtrarItens() {
   renderLista(l);
 }
 
-const EMOJI = {Papel:'&#128196;', Quimico:'&#129398;', Equipamento:'&#129529;', Descartavel:'&#128465;', Outros:'&#128230;'};
+const CAT_CORES = {Papel:'#5B9BD5', Quimico:'#6613D0', Equipamento:'#FE8F1C', Descartavel:'#1FAC66', Outros:'#6B6B7D'};
+const CAT_SIGLA = {Papel:'PT', Quimico:'QM', Equipamento:'EQ', Descartavel:'DS', Outros:'OT'};
 
 function renderLista(lista) {
   if(!lista.length) {
@@ -546,8 +547,12 @@ function renderLista(lista) {
     var card = document.createElement('div');
     card.className = 'icard' + (baixo ? ' alerta' : '');
     card.onclick = function() { abrirModal(item); };
+    var cor = CAT_CORES[item.categoria] || '#6B6B7D';
+    var sigla = CAT_SIGLA[item.categoria] || '??';
+    var valorItem = ((item.saldo_atual||0) * (item.preco_unitario||0));
+    var valorStr = valorItem > 0 ? 'R$ ' + valorItem.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}) : '';
     card.innerHTML =
-      '<div class="iico">' + (EMOJI[item.categoria]||'[.]') + '</div>' +
+      '<div class="iico" style="background:' + cor + '22;color:' + cor + ';font-size:11px;font-weight:800;letter-spacing:.04em;">' + sigla + '</div>' +
       '<div class="iinf">' +
         '<div class="inome">' + (item.nome||'-') + '</div>' +
         '<div class="icat">' + (item.categoria||'') + '</div>' +
@@ -556,6 +561,7 @@ function renderLista(lista) {
       '<div class="isaldo-col">' +
         '<div class="isaldo' + (baixo ? ' baixo' : '') + '">' + (item.saldo_atual!=null?item.saldo_atual:'-') + '</div>' +
         '<div class="iunit">' + (item.unidade||'') + '</div>' +
+        (valorStr ? '<div style="font-size:9px;color:var(--lx-fg-muted);margin-top:2px;">' + valorStr + '</div>' : '') +
       '</div>';
     container.appendChild(card);
   })
