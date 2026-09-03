@@ -1090,6 +1090,46 @@ function renderHistoricoKiosk(lista) {
   html += '</div>';
   cont.innerHTML = html;
 }
+
+// ── INIT ──
+var defaults = [
+  { nome: 'Joao', email: 'joao@logcomex.com' },
+  { nome: 'Henrique', email: 'henrique.silva@logcomex.com' },
+  { nome: 'Daiane', email: 'daiane@logcomex.com' },
+  { nome: 'Luciane', email: 'luciane@logcomex.com' },
+  { nome: 'Natalia', email: 'natalia@logcomex.com' }
+];
+var saved_users = JSON.parse(localStorage.getItem('kiosk_usuarios') || '[]');
+defaults.forEach(function(d) {
+  if (!saved_users.find(function(u){ return u.email === d.email; })) {
+    saved_users.push(d);
+  }
+});
+localStorage.setItem('kiosk_usuarios', JSON.stringify(saved_users));
+
+// Verificar sessão salva (menos de 24h)
+var _savedSession = localStorage.getItem('kiosk_usuario_atual');
+if (_savedSession) {
+  try {
+    var _obj = JSON.parse(_savedSession);
+    if ((Date.now() - _obj.ts) < INATIVIDADE_MS) {
+      document.getElementById('screen-video').style.display = 'none';
+      entrarComoUsuario(_obj.usuario);
+    } else {
+      localStorage.removeItem('kiosk_usuario_atual');
+      carregarUsuarios();
+      document.getElementById('screen-video').style.display = 'flex';
+    }
+  } catch(e) {
+    localStorage.removeItem('kiosk_usuario_atual');
+    carregarUsuarios();
+    document.getElementById('screen-video').style.display = 'flex';
+  }
+} else {
+  carregarUsuarios();
+  document.getElementById('screen-video').style.display = 'flex';
+}
+
 </script>
 </body>
 </html>

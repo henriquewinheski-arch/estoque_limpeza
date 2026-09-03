@@ -689,13 +689,12 @@ function renderLista(lista) {
   }
   var container = document.getElementById('lista-itens');
   container.innerHTML = '';
-  lista.forEach(function(item) {
+  lista.forEach(function(item, idx_num) {
     var baixo = Number(item.saldo_atual) <= Number(item.estoque_minimo);
     var card = document.createElement('div');
     card.className = 'icard' + (baixo ? ' alerta' : '');
     card.onclick = function() { abrirModal(item); };
     var cor = CAT_CORES[item.categoria] || '#6B6B7D';
-    var idx_num = lista.indexOf(item);
     var sigla = String(idx_num + 1).padStart(3, '0');
     var valorItem = ((item.saldo_atual||0) * (item.preco_unitario||0));
     var valorStr = valorItem > 0 ? 'R$ ' + valorItem.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}) : '';
