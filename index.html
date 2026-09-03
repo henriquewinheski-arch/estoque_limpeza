@@ -309,6 +309,15 @@ html,body{height:100%;font-family:var(--lx-font-body);background:var(--lx-off-wh
 .hist-num.saida   { color: var(--chip-red-fg); }
 .hist-unit { font-size: 10px; color: var(--lx-fg-muted); font-weight: 500; }
 
+
+.activity-item{padding:13px 0;border-bottom:1px solid var(--lx-border);}
+.activity-item:last-child{border-bottom:none;}
+.activity-item .top{display:flex;justify-content:space-between;align-items:baseline;font-size:13px;font-weight:600;color:var(--lx-primary-darkest);gap:8px;}
+.activity-item .meta{font-size:11.5px;color:var(--lx-fg-muted);margin-top:3px;}
+.tipo-entrada{color:var(--chip-green-fg);}
+.tipo-saida{color:var(--chip-red-fg);}
+.hist-wrapper{background:#fff;border-radius:16px;padding:4px 16px;border:1px solid var(--lx-border);box-shadow:var(--lx-shadow-sm);}
+
 </style>
 </head>
 <body>
@@ -988,220 +997,29 @@ async function carregarHistorico() {
 }
 
 function renderHistorico(lista) {
+  var cont = document.getElementById('lista-historico');
   if (!lista.length) {
-    document.getElementById('lista-historico').innerHTML = '<div class="empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><polyline points="12 8 12 12 14 14"/></svg><div class="et">Nenhum movimento ainda</div><div class="es">Registre entradas e saídas</div></div>';
+    cont.innerHTML = '<div class="empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><polyline points="12 8 12 12 14 14"/></svg><div class="et">Nenhum movimento ainda</div><div class="es">Registre entradas e saídas</div></div>';
     return;
   }
-  var cont = document.getElementById('lista-historico');
-  cont.innerHTML = '';
+  var html = '<div class="hist-wrapper">';
   lista.forEach(function(m) {
     var tipo = (m.tipo || '').toLowerCase();
-    var origem = (m.origem || 'manual').toLowerCase();
-    var ico = tipo === 'entrada' ? '📥' : (origem === 'voz' ? '🎤' : '📤');
     var d = m.createdAt || m.created_at;
     var dataObj = d ? new Date(d) : null;
-    var dataStr = dataObj ? dataObj.toLocaleDateString('pt-BR', {day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'}) : '—';
-    // Cruzar item_id com catálogo para obter nome
+    var dataStr = dataObj ? dataObj.toLocaleDateString('pt-BR', {day:'2-digit',month:'2-digit',year:'2-digit'}) + ', ' + dataObj.toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'}) : '—';
     var itemInfo = todosItens.find(function(i){ return i.item_id === m.item_id; });
     var nomeItem = itemInfo ? itemInfo.nome : (m.item_nome || m.item_id || '—');
-    var unidade = itemInfo ? itemInfo.unidade : (m.unidade || 'un');
-    var card = document.createElement('div');
-    card.className = 'hist-item';
-    card.innerHTML =
-      '<div class="hist-ico ' + tipo + '">' + ico + '</div>' +
-      '<div class="hist-inf">' +
-        '<div class="hist-nome">' + nomeItem + '</div>' +
-        '<div class="hist-meta">' + dataStr + ' · ' + (m.usuario || '—') + (m.observacao ? ' · ' + m.observacao : '') + '</div>' +
-      '</div>' +
-      '<div class="hist-qty">' +
-        '<div class="hist-num ' + tipo + '">' + (tipo === 'entrada' ? '+' : '-') + (m.quantidade || '?') + '</div>' +
-        '<div class="hist-unit">' + unidade + '</div>' +
+    var unidade = itemInfo ? itemInfo.unidade : 'un';
+    var tipoLabel = tipo === 'entrada' ? 'Entrada' : 'Saída';
+    var qtdLabel = tipoLabel + ' · ' + (m.quantidade||'?') + ' ' + unidade + '.';
+    var origem = m.origem ? ' · Origem: ' + m.origem : '';
+    var obs = m.observacao ? ' · ' + m.observacao : '';
+    html += '<div class="activity-item">' +
+      '<div class="top"><span>' + nomeItem + '</span><span class="tipo-' + tipo + '">' + qtdLabel + '</span></div>' +
+      '<div class="meta">' + dataStr + ' · ' + (m.usuario||'—') + origem + obs + '</div>' +
       '</div>';
-    cont.appendChild(card);
   });
-}
-
-function fmtBR(n) { return Number(n).toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2}); }
-
-function toast(msg, tipo) {
-  tipo = tipo || '';
-  const t = document.getElementById('toast');
-  t.textContent = msg;
-  t.className = 'toast show' + (tipo ? ' ' + tipo : '');
-  setTimeout(function(){ t.className = 'toast'; }, 3000);
-}
-
-</script>
-<script>
-// ---- Login com Google (Authorization Code flow — troca do código feita no backend n8n) ----
-  const CLIENT_ID = "161510977968-oofrl3c78ijlt6t146lm35sdltdr4tdv.apps.googleusercontent.com";
-  const DOMINIO_ESPERADO = "logcomex.com";
-  const CONSULTA_URL = "https://ramonlogcomex.app.n8n.cloud/webhook/limpeza-itens";
-  const SCAN_URL = "https://ramonlogcomex.app.n8n.cloud/webhook/limpeza-item";
-  const VOZ_URL = "https://ramonlogcomex.app.n8n.cloud/webhook/limpeza-voz";
-  const TRANSFER_URL = "";
-  const OAUTH_EXCHANGE_URL = "https://ramonlogcomex.app.n8n.cloud/webhook/limpeza-oauth-exchange";
-  const REDIRECT_URI = window.location.origin + window.location.pathname;
-  let currentIdToken = null;
-
-  function iniciarLoginGoogle(){
-    const state = Math.random().toString(36).slice(2) + Date.now().toString(36);
-    sessionStorage.setItem("oauth_state", state);
-    const params = new URLSearchParams({
-      client_id: CLIENT_ID,
-      redirect_uri: REDIRECT_URI,
-      response_type: "code",
-      scope: "openid email profile",
-      state: state,
-      hd: DOMINIO_ESPERADO,
-      prompt: "select_account",
-      access_type: "online"
-    });
-    window.location.href = "https://accounts.google.com/o/oauth2/v2/auth?" + params.toString();
-  }
-
-  function decodeJwt(token){
-    const base64 = token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/");
-    return JSON.parse(decodeURIComponent(atob(base64).split("").map(c =>
-      "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2)).join("")));
-  }
-
-  async function processarLoginCallback(){
-    const searchParams = new URLSearchParams(window.location.search);
-    const code = searchParams.get("code");
-    const state = searchParams.get("state");
-    const erroOauth = searchParams.get("error");
-
-    if (!code && !erroOauth) return false;
-
-    // Limpa a query da URL imediatamente pra não deixar o código exposto/reprocessável
-    history.replaceState(null, "", window.location.pathname);
-
-    if (erroOauth) {
-      // login_required/interaction_required/consent_required acontecem quando a tentativa
-      // silenciosa (pularVideo automático) não encontra sessão do Google ativa no aparelho —
-      // não é um erro real do usuário, só mostra a tela de login normal pra ele entrar uma vez.
-      const erroSilenciosoEsperado = ["login_required", "interaction_required", "consent_required"].includes(erroOauth);
-      if (!erroSilenciosoEsperado) {
-        mostrarErroLogin("Login cancelado ou negado pelo Google (" + erroOauth + ").");
-      } else {
-        document.getElementById("loginGate").classList.add("show");
-      }
-      return true;
-    }
-
-    const stateEsperado = sessionStorage.getItem("oauth_state");
-    sessionStorage.removeItem("oauth_state");
-    if (state !== stateEsperado) {
-      mostrarErroLogin("Falha de segurança na validação do login (state). Tente novamente.");
-      return true;
-    }
-
-    const eraTentativaSilenciosa = sessionStorage.getItem("oauth_silencioso") === "1";
-    sessionStorage.removeItem("oauth_silencioso");
-    if (!eraTentativaSilenciosa) mostrarProcessandoLogin();
-
-    try {
-      const res = await fetch(OAUTH_EXCHANGE_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code: code, redirectUri: REDIRECT_URI })
-      });
-      const resultado = await res.json();
-      if (!resultado.ok) {
-        mostrarErroLogin("Não foi possível concluir o login: " + (resultado.erro || "erro desconhecido") + ".");
-        return true;
-      }
-      const payload = decodeJwt(resultado.id_token);
-      if (payload.hd !== DOMINIO_ESPERADO) {
-        mostrarErroLogin("Apenas contas @" + DOMINIO_ESPERADO + " podem acessar este painel.");
-        return true;
-      }
-      salvarSessao(resultado.id_token, payload);
-      concluirLogin(resultado.id_token, payload);
-    } catch (e) {
-      console.error("Falha na troca do código OAuth:", e);
-      mostrarErroLogin("Erro de conexão ao concluir o login. Tente novamente.");
-    }
-    return true;
-  }
-
-  function salvarSessao(idToken, payload){
-    localStorage.setItem('lx_tok', idToken);
-    localStorage.setItem('lx_tok_exp', payload.exp);
-  }
-
-  function limparSessaoSalva(){
-    localStorage.removeItem("lx_tok");
-    ;
-  }
-
-  function mostrarProcessandoLogin(){
-    document.getElementById("loginGate").classList.add("show");
-    const btn = document.getElementById("lgGoogleBtn");
-    if (btn) btn.innerHTML = "Concluindo login...";
-  }
-
-  function mostrarErroLogin(msg){
-    document.getElementById("loginGate").classList.add("show");
-    const errEl = document.getElementById("lgErr");
-    errEl.textContent = msg;
-    errEl.classList.add("show");
-  }
-
-  function concluirLogin(idToken, payload){
-    document.getElementById("loginGate").classList.remove("show");
-    // Tocar vídeo de abertura antes de mostrar o app
-    var sv = document.getElementById("screen-video");
-    var vid = document.getElementById("intro-video");
-    if (sv && vid) {
-      sv.style.display = "flex";
-      vid.muted = true;
-      vid.play();
-      vid.onended = function() { encerrarVideo(); };
-      setTimeout(function() { encerrarVideo(); }, 15000);
-    } else {
-      document.getElementById("screen-app").style.display = "flex";
-    }
-    currentIdToken = idToken;
-    userEmail = payload.email;
-    userName = payload.name;
-    document.getElementById("user-avatar").textContent = payload.name ? payload.name[0].toUpperCase() : "?";
-    const itemParam = new URLSearchParams(window.location.search).get("item");
-    setTimeout(function() {
-      carregarItens().then(function() {
-        if (itemParam) {
-          const item = todosItens.find(function(i){ return i.item_id === itemParam; });
-          if (item) abrirModal(item);
-        }
-      });
-    }, 100);
-  }
-
-  window.addEventListener("load", async function(){
-    // Verificar sessão salva primeiro
-    var savedToken = localStorage.getItem('lx_tok');
-    var savedExp = localStorage.getItem('lx_tok_exp');
-    if (savedToken && savedExp && (Date.now() / 1000) < Number(savedExp)) {
-      try {
-        var payload = decodeJwt(savedToken);
-        if (payload.email && payload.email.endsWith('@logcomex.com')) {
-          // Sessão já existente: mostra app direto sem vídeo
-          document.getElementById("screen-app").style.display = "flex";
-          document.getElementById("user-avatar").textContent = payload.name ? payload.name[0].toUpperCase() : "?";
-          userEmail = payload.email;
-          userName = payload.name;
-          carregarItens();
-          return;
-        }
-      } catch(e) {}
-    }
-    localStorage.removeItem('lx_tok');
-    localStorage.removeItem('lx_tok_exp');
-    const veioDoLogin = await processarLoginCallback();
-    if (veioDoLogin) return;
-    document.getElementById("loginGate").classList.add("show");
-  });
-</script>
-</body>
-</html>
+  html += '</div>';
+  cont.innerHTML = html;
+}>

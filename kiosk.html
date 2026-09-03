@@ -468,6 +468,15 @@ html, body { height: 100%; font-family: var(--font); background: #0B0D19; color:
 .hist-num.saida   { color: var(--chip-red-fg); }
 .hist-unit { font-size: 10px; color: var(--gray); font-weight: 500; }
 
+
+.activity-item{padding:13px 0;border-bottom:1px solid var(--border);}
+.activity-item:last-child{border-bottom:none;}
+.activity-item .top{display:flex;justify-content:space-between;align-items:baseline;font-size:13px;font-weight:600;color:var(--purple);gap:8px;}
+.activity-item .meta{font-size:11.5px;color:var(--gray);margin-top:3px;}
+.tipo-entrada{color:var(--chip-green-fg);}
+.tipo-saida{color:var(--chip-red-fg);}
+.hist-wrapper{background:#fff;border-radius:16px;padding:4px 16px;border:1px solid var(--border);box-shadow:0 2px 8px rgba(11,13,25,.06);}
+
 </style>
 </head>
 <body>
@@ -1052,198 +1061,32 @@ async function carregarHistoricoKiosk() {
 }
 
 function renderHistoricoKiosk(lista) {
+  var cont = document.getElementById('lista-historico-kiosk');
   if (!lista.length) {
-    document.getElementById('lista-historico-kiosk').innerHTML = '<div class="spin-wrap"><span>Nenhum movimento ainda</span></div>';
+    cont.innerHTML = '<div class="spin-wrap"><span>Nenhum movimento ainda</span></div>';
     return;
   }
-  var cont = document.getElementById('lista-historico-kiosk');
-  cont.innerHTML = '';
+  var html = '<div style="background:#fff;border-radius:16px;padding:4px 16px;border:1px solid var(--border);">';
   lista.forEach(function(m) {
     var tipo = (m.tipo || '').toLowerCase();
-    var ico = tipo === 'entrada' ? '📥' : '📤';
-    var d = m.createdAt || m.created_at; var dataObjK = d ? new Date(d) : null; d = dataObjK;
-    var dataStr = d ? d.toLocaleDateString('pt-BR', {day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'}) : '—';
-    var itemInfoK = todosItens.find(function(i){ return i.item_id === m.item_id; });
-    var nomeItemK = itemInfoK ? itemInfoK.nome : (m.item_nome || m.item_id || '—');
-    var card = document.createElement('div');
-    card.className = 'hist-item';
-    card.innerHTML =
-      '<div class="hist-ico ' + tipo + '">' + ico + '</div>' +
-      '<div class="hist-inf">' +
-        '<div class="hist-nome">' + nomeItemK + '</div>' +
-        '<div class="hist-meta">' + dataStr + ' · ' + (m.usuario || '—') + '</div>' +
+    var d = m.createdAt || m.created_at;
+    var dataObj = d ? new Date(d) : null;
+    var dataStr = dataObj ? dataObj.toLocaleDateString('pt-BR', {day:'2-digit',month:'2-digit',year:'2-digit'}) + ', ' + dataObj.toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'}) : '—';
+    var itemInfo = todosItens.find(function(i){ return i.item_id === m.item_id; });
+    var nomeItem = itemInfo ? itemInfo.nome : (m.item_nome || m.item_id || '—');
+    var unidade = itemInfo ? itemInfo.unidade : 'un';
+    var tipoLabel = tipo === 'entrada' ? 'Entrada' : 'Saída';
+    var qtdLabel = tipoLabel + ' · ' + (m.quantidade||'?') + ' ' + unidade + '.';
+    var origem = m.origem ? ' · Origem: ' + m.origem : '';
+    var corTipo = tipo === 'entrada' ? 'var(--green)' : 'var(--red)';
+    html += '<div style="padding:13px 0;border-bottom:1px solid var(--border);">' +
+      '<div style="display:flex;justify-content:space-between;align-items:baseline;font-size:13px;font-weight:600;color:var(--purple);gap:8px;">' +
+        '<span>' + nomeItem + '</span>' +
+        '<span style="color:' + corTipo + ';white-space:nowrap;">' + qtdLabel + '</span>' +
       '</div>' +
-      '<div class="hist-qty">' +
-        '<div class="hist-num ' + tipo + '">' + (tipo === 'entrada' ? '+' : '-') + (m.quantidade || '?') + '</div>' +
-        '<div class="hist-unit">un</div>' +
+      '<div style="font-size:11.5px;color:var(--gray);margin-top:3px;">' + dataStr + ' · ' + (m.usuario||'—') + origem + '</div>' +
       '</div>';
-    cont.appendChild(card);
   });
-}
-
-// ── VOZ GLOBAL ──
-var vozGravando = false;
-var vozMediaRec = null;
-var vozAudioChunks = [];
-var vozGlobalParsed = null;
-
-function abrirVozGlobal() {
-  document.getElementById('voz-global-overlay').classList.add('open');
-  document.getElementById('voz-global-confirm').style.display = 'none';
-  document.getElementById('voz-global-transcript').style.display = 'none';
-  vozGlobalParsed = null;
-}
-
-function fecharVozGlobal() {
-  pararVozGlobal();
-  document.getElementById('voz-global-overlay').classList.remove('open');
-}
-
-async function toggleVozGlobal() {
-  if (vozGravando) pararVozGlobal();
-  else await iniciarVozGlobal();
-}
-
-async function iniciarVozGlobal() {
-  try {
-    var stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    vozAudioChunks = [];
-    vozMediaRec = new MediaRecorder(stream);
-    vozMediaRec.ondataavailable = function(e) { if (e.data.size > 0) vozAudioChunks.push(e.data); };
-    vozMediaRec.onstop = processarVozGlobal;
-    vozMediaRec.start();
-    vozGravando = true;
-    document.getElementById('btn-mic-global').classList.add('gravando');
-    document.getElementById('voz-global-confirm').style.display = 'none';
-    document.getElementById('voz-global-transcript').style.display = 'none';
-  } catch(e) { toast('Microfone não disponível', 'err'); }
-}
-
-function pararVozGlobal() {
-  if (vozMediaRec && vozGravando) {
-    vozMediaRec.stop();
-    vozMediaRec.stream.getTracks().forEach(function(t) { t.stop(); });
-    vozGravando = false;
-    document.getElementById('btn-mic-global').classList.remove('gravando');
-  }
-}
-
-async function processarVozGlobal() {
-  var blob = new Blob(vozAudioChunks, { type: 'audio/webm' });
-  var reader = new FileReader();
-  reader.readAsDataURL(blob);
-  reader.onloadend = async function() {
-    var b64 = reader.result.split(',')[1];
-    // Enviar sem item_id para busca livre
-    try {
-      var r = await api('/limpeza-voz', { method: 'POST', body: JSON.stringify({
-        audio: b64,
-        item_id: '',
-        item_nome: 'qualquer item do estoque',
-        usuario: usuarioAtual ? usuarioAtual.email : '',
-        catalogo: todosItens.map(function(i){ return i.item_id + '|' + i.nome; }).join('\n')
-      })});
-      if (r.ok && r.intencao) {
-        vozGlobalParsed = r.intencao;
-        // Usar item_id retornado pelo n8n diretamente
-        var itemEncontrado = null;
-        if (r.item_id) {
-          itemEncontrado = todosItens.find(function(i){ return i.item_id === r.item_id; });
-        }
-        if (!itemEncontrado && r.intencao.item_id) {
-          itemEncontrado = todosItens.find(function(i){ return i.item_id === r.intencao.item_id; });
-        }
-        if (!itemEncontrado && r.item_nome) {
-          var nome = r.item_nome.toLowerCase();
-          itemEncontrado = todosItens.find(function(i){
-            return (i.nome || '').toLowerCase().indexOf(nome) >= 0;
-          });
-        }
-        vozGlobalParsed.itemEncontrado = itemEncontrado;
-        // Guardar item_id do n8n mesmo se nao encontrou em todosItens
-        if (!itemEncontrado && r.item_id) {
-          vozGlobalParsed.itemEncontrado = { item_id: r.item_id, nome: r.item_nome, unidade: '' };
-          itemEncontrado = vozGlobalParsed.itemEncontrado;
-        }
-        var tr = document.getElementById('voz-global-transcript');
-        tr.textContent = '"' + (r.transcricao || '') + '"';
-        tr.style.display = 'block';
-        document.getElementById('vg-item').textContent = itemEncontrado ? itemEncontrado.nome : (r.intencao.item_nome || 'Não identificado');
-        document.getElementById('vg-tipo').textContent = r.intencao.tipo === 'entrada' ? '📥 Entrada' : '📤 Saída';
-        document.getElementById('vg-qty').textContent = r.intencao.quantidade + (itemEncontrado ? ' ' + (itemEncontrado.unidade || '') : '');
-        document.getElementById('voz-global-confirm').style.display = 'block';
-      } else {
-        toast('Não entendi — tente novamente', 'err');
-      }
-    } catch(e) { toast('Erro ao processar voz', 'err'); }
-  };
-}
-
-async function confirmarVozGlobal() {
-  if (!vozGlobalParsed || !vozGlobalParsed.itemEncontrado) {
-    toast('Item não identificado no estoque', 'err'); return;
-  }
-  var btn = document.querySelector('.btn-ok-g');
-  btn.disabled = true; btn.textContent = 'Registrando...';
-  try {
-    var r = await api('/limpeza-movimento', { method: 'POST', body: JSON.stringify({
-      item_id: vozGlobalParsed.itemEncontrado.item_id,
-      tipo: vozGlobalParsed.tipo,
-      quantidade: vozGlobalParsed.quantidade,
-      usuario: usuarioAtual ? usuarioAtual.email : '',
-      origem: 'voz',
-      observacao: vozGlobalParsed.observacao || ''
-    })});
-    if (r.ok) {
-      toast('Registrado por voz!', 'ok');
-      fecharVozGlobal();
-      await carregarItens();
-    } else toast('Erro ao registrar', 'err');
-  } catch(e) { toast('Erro: ' + e.message, 'err'); }
-  finally { btn.disabled = false; btn.textContent = 'Confirmar'; }
-}
-
-function cancelarVozGlobal() {
-  vozGlobalParsed = null;
-  document.getElementById('voz-global-confirm').style.display = 'none';
-  document.getElementById('voz-global-transcript').style.display = 'none';
-}
-
-// ── INIT ──
-(function init() {
-  // Garantir colaboradores padrão cadastrados
-  var defaults = [
-    { nome: 'Joao', email: 'joao@logcomex.com' },
-    { nome: 'Henrique', email: 'henrique.silva@logcomex.com' },
-    { nome: 'Daiane', email: 'daiane@logcomex.com' },
-    { nome: 'Luciane', email: 'luciane@logcomex.com' },
-    { nome: 'Natalia', email: 'natalia@logcomex.com' }
-  ];
-  var saved_users = JSON.parse(localStorage.getItem('kiosk_usuarios') || '[]');
-  defaults.forEach(function(d) {
-    if (!saved_users.find(function(u){ return u.email === d.email; })) {
-      saved_users.push(d);
-    }
-  });
-  localStorage.setItem('kiosk_usuarios', JSON.stringify(saved_users));
-
-  // Verificar sessão salva (menos de 24h)
-  var saved = localStorage.getItem('kiosk_usuario_atual');
-  if (saved) {
-    try {
-      var obj = JSON.parse(saved);
-      if ((Date.now() - obj.ts) < INATIVIDADE_MS) {
-        // Sessão válida: ir direto para o app (sem vídeo)
-        document.getElementById('screen-video').style.display = 'none';
-        entrarComoUsuario(obj.usuario);
-        return;
-      }
-    } catch(e) {}
-    localStorage.removeItem('kiosk_usuario_atual');
-  }
-  // Sem sessão: mostrar vídeo
-  carregarUsuarios();
-})();
-</script>
-</body>
-</html>
+  html += '</div>';
+  cont.innerHTML = html;
+}>
