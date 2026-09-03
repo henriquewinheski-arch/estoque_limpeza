@@ -614,6 +614,7 @@ html,body{height:100%;font-family:var(--lx-font-body);background:var(--lx-off-wh
 </script>
 <script>
 const N8N = 'https://ramonlogcomex.app.n8n.cloud/webhook';
+function fmtBR(n) { return Number(n).toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2}); }
 let todosItens = [];
 let filtroAtivo = 'todos';
 let itemSelecionado = null;
