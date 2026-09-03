@@ -508,7 +508,8 @@ html, body { height: 100%; font-family: var(--font); background: #0B0D19; color:
       <div class="topbar-sep"></div>
       <span class="topbar-tag">Facilities · Limpeza</span>
     </div>
-    <button onclick="toggleHistoricoKiosk()" style="background:rgba(226,208,250,.1);border:1px solid rgba(226,208,250,.2);border-radius:8px;padding:6px 12px;color:var(--lavender);font-size:12px;font-weight:600;cursor:pointer;font-family:var(--font);">Histórico</button>
+    <button onclick="toggleHistoricoKiosk()" style="background:rgba(226,208,250,.1);border:1px solid rgba(226,208,250,.2);border-radius:8px;padding:6px 10px;color:var(--lavender);font-size:11px;font-weight:600;cursor:pointer;font-family:var(--font);">Histórico</button>
+    <button onclick="toggleParetoKiosk()" style="background:rgba(226,208,250,.1);border:1px solid rgba(226,208,250,.2);border-radius:8px;padding:6px 10px;color:var(--lavender);font-size:11px;font-weight:600;cursor:pointer;font-family:var(--font);">Pareto</button>
     <div class="topbar-user" onclick="trocarUsuario()">
       <div class="topbar-user-avatar" id="topbar-avatar">?</div>
       <span class="topbar-user-nome" id="topbar-nome">—</span>
@@ -520,6 +521,17 @@ html, body { height: 100%; font-family: var(--font); background: #0B0D19; color:
       <input type="text" id="search-input" placeholder="Buscar produto..." oninput="filtrar()">
     </div>
     <div id="lista-itens"><div class="spin-wrap"><div class="spin"></div><span>Carregando estoque...</span></div></div>
+  </div>
+
+
+  <!-- PARETO KIOSK -->
+  <div id="section-pareto" style="display:none;padding:16px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+      <span style="font-size:16px;font-weight:700;color:#0B0D19;">Curva ABC — Pareto</span>
+      <button class="chip" onclick="carregarParetoKiosk()">&#8635; Atualizar</button>
+    </div>
+    <canvas id="pareto-canvas-k" style="width:100%;max-height:300px;border-radius:12px;background:#fff;"></canvas>
+    <div id="pareto-lista-k" style="margin-top:14px;"></div>
   </div>
 
   <!-- HISTÓRICO KIOSK -->
@@ -737,7 +749,7 @@ async function carregarItens() {
   }
 }
 
-var EMOJI = { Papel: '📄', Quimico: '🧴', Equipamento: '🧹', Descartavel: '🗑️', Outros: '📦' };
+var CAT_CORES_K = {'Papel':'#5B9BD5','Químico':'#6613D0','Quimico':'#6613D0','Equipamento':'#FE8F1C','Descartavel':'#1FAC66','Descartável':'#1FAC66','Outros':'#6B6B7D'};
 
 function filtrar() {
   var q = (document.getElementById('search-input').value || '').toLowerCase();
@@ -757,8 +769,11 @@ function renderLista(lista) {
     var card = document.createElement('div');
     card.className = 'item-card' + (baixo ? ' alerta' : '');
     card.onclick = function() { abrirModal(item); };
+    var cor_k = CAT_CORES_K[item.categoria] || '#6B6B7D';
+    var num_k = lista.indexOf(item);
+    var seq_k = String(num_k + 1).padStart(3,'0');
     card.innerHTML =
-      '<div class="item-ico">' + (EMOJI[item.categoria] || '📦') + '</div>' +
+      '<div class="item-ico" style="background:' + cor_k + '22;color:' + cor_k + ';font-size:12px;font-weight:800;">' + seq_k + '</div>' +
       '<div class="item-info">' +
         '<div class="item-nome">' + (item.nome || '—') + '</div>' +
         '<div class="item-cat">' + (item.categoria || '') + '</div>' +
@@ -913,12 +928,115 @@ function toast(msg, tipo) {
 
 
 
+
+var showingPareto = false;
+
+function toggleParetoKiosk() {
+  showingPareto = !showingPareto;
+  showingHistorico = false;
+  document.querySelector('.content').style.display = showingPareto ? 'none' : 'block';
+  document.getElementById('section-historico').style.display = 'none';
+  document.getElementById('section-pareto').style.display = showingPareto ? 'block' : 'none';
+  if (showingPareto) carregarParetoKiosk();
+}
+
+function carregarParetoKiosk() {
+  if (!todosItens.length) { carregarItens().then(desenharParetoKiosk); return; }
+  desenharParetoKiosk();
+}
+
+function desenharParetoKiosk() {
+  var dados = todosItens
+    .filter(function(i){ return i.ativo !== 'false' && Number(i.preco_unitario) > 0; })
+    .map(function(i){ return { nome: i.nome, valor: (Number(i.saldo_atual)||0)*(Number(i.preco_unitario)||0) }; })
+    .filter(function(i){ return i.valor > 0; })
+    .sort(function(a,b){ return b.valor - a.valor; });
+
+  var totalValor = dados.reduce(function(s,i){ return s + i.valor; }, 0);
+  var acum = 0;
+  dados.forEach(function(i){
+    acum += i.valor;
+    i.pct = totalValor > 0 ? (i.valor/totalValor*100) : 0;
+    i.acum = totalValor > 0 ? (acum/totalValor*100) : 0;
+    i.classe = i.acum <= 80 ? 'A' : i.acum <= 95 ? 'B' : 'C';
+  });
+
+  var top = dados.slice(0, 15);
+  var canvas = document.getElementById('pareto-canvas-k');
+  var dpr = window.devicePixelRatio || 1;
+  var W = canvas.parentElement.clientWidth - 32;
+  var H = 260;
+  canvas.width = W * dpr; canvas.height = H * dpr;
+  canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
+  var ctx = canvas.getContext('2d');
+  ctx.scale(dpr, dpr);
+  var pad = {t:20,r:50,b:70,l:60};
+  var cW = W-pad.l-pad.r, cH = H-pad.t-pad.b;
+  var barW = cW/top.length*0.7, gap = cW/top.length;
+  var maxVal = top[0] ? top[0].valor : 1;
+
+  ctx.fillStyle = '#fff'; ctx.fillRect(0,0,W,H);
+
+  // Grid
+  [0,25,50,75,100].forEach(function(pct){
+    var y = pad.t+cH-(pct/100*cH);
+    ctx.strokeStyle='#E4E1F0'; ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(pad.l,y); ctx.lineTo(W-pad.r,y); ctx.stroke();
+    ctx.fillStyle='#6B6B7D'; ctx.font='10px system-ui'; ctx.textAlign='right';
+    ctx.fillText(pct+'%', pad.l-6, y+3);
+  });
+
+  // Barras
+  top.forEach(function(it,i){
+    var x = pad.l+i*gap+(gap-barW)/2;
+    var barH = (it.valor/maxVal)*cH;
+    var y = pad.t+cH-barH;
+    ctx.fillStyle = it.classe==='A'?'#C70404':it.classe==='B'?'#FE8F1C':'#1FAC66';
+    ctx.fillRect(x,y,barW,barH);
+    ctx.fillStyle='#6B6B7D'; ctx.font='9px system-ui'; ctx.textAlign='center';
+    ctx.save(); ctx.translate(x+barW/2, pad.t+cH+8); ctx.rotate(-Math.PI/4);
+    ctx.fillText((it.nome||'').split(' ').slice(0,2).join(' '), 0, 0);
+    ctx.restore();
+  });
+
+  // Linha acumulada
+  ctx.strokeStyle='#2D085D'; ctx.lineWidth=2.5;
+  ctx.beginPath();
+  top.forEach(function(it,i){
+    var x=pad.l+i*gap+gap/2, y=pad.t+cH-(it.acum/100*cH);
+    i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
+  });
+  ctx.stroke();
+  top.forEach(function(it,i){
+    var x=pad.l+i*gap+gap/2, y=pad.t+cH-(it.acum/100*cH);
+    ctx.fillStyle='#2D085D'; ctx.beginPath(); ctx.arc(x,y,4,0,Math.PI*2); ctx.fill();
+  });
+
+  // Eixo Y direito
+  ctx.fillStyle='#2D085D'; ctx.font='10px system-ui'; ctx.textAlign='left';
+  [0,25,50,75,100].forEach(function(pct){
+    ctx.fillText(pct+'%', W-pad.r+6, pad.t+cH-(pct/100*cH)+3);
+  });
+
+  // Tabela resumida
+  var lista = document.getElementById('pareto-lista-k');
+  lista.innerHTML = dados.slice(0,20).map(function(it,i){
+    return '<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid #E4E1F0;">' +
+      '<span style="font-size:11px;font-weight:700;color:#C0C1C9;width:24px;">' + (i+1) + '</span>' +
+      '<div style="flex:1;min-width:0;"><div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + (it.nome||'-') + '</div>' +
+      '<div style="font-size:11px;color:#6B6B7D;">R$ ' + it.valor.toLocaleString('pt-BR',{minimumFractionDigits:2}) + ' · ' + it.pct.toFixed(1) + '% · acum. ' + it.acum.toFixed(1) + '%</div></div>' +
+      '<span style="font-size:11px;font-weight:800;padding:3px 8px;border-radius:999px;background:' + (it.classe==='A'?'rgba(199,4,4,.08)':it.classe==='B'?'rgba(254,143,28,.1)':'rgba(31,172,102,.08)') + ';color:' + (it.classe==='A'?'#C70404':it.classe==='B'?'#CB6700':'#1FAC66') + ';">' + it.classe + '</span></div>';
+  }).join('');
+}
+
 var showingHistorico = false;
 
 function toggleHistoricoKiosk() {
   showingHistorico = !showingHistorico;
+  showingPareto = false;
   document.querySelector('.content').style.display = showingHistorico ? 'none' : 'block';
   document.getElementById('section-historico').style.display = showingHistorico ? 'block' : 'none';
+  document.getElementById('section-pareto').style.display = 'none';
   if (showingHistorico) carregarHistoricoKiosk();
 }
 

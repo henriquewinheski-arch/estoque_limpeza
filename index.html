@@ -367,7 +367,7 @@ html,body{height:100%;font-family:var(--lx-font-body);background:var(--lx-off-wh
       <div id="lista-itens"><div class="spin-wrap"><div class="spin"></div><span>Carregando...</span></div></div>
     </div>
     <div class="page" id="page-abc">
-      <div class="sh" style="margin-bottom:16px"><span class="sh-t">Curva ABC</span><button class="chip" onclick="carregarAbc()">&#8635; Atualizar</button></div>
+      <div class="sh" style="margin-bottom:16px"><span class="sh-t">Curva ABC — Pareto</span><button class="chip" onclick="carregarAbc()">&#8635; Atualizar</button></div>
       <div id="abc-content"><div class="spin-wrap"><div class="spin"></div><span>Calculando...</span></div></div>
     </div>
     <div class="page" id="page-cadastro">
@@ -532,8 +532,7 @@ function filtrarItens() {
   renderLista(l);
 }
 
-const CAT_CORES = {Papel:'#5B9BD5', Quimico:'#6613D0', Equipamento:'#FE8F1C', Descartavel:'#1FAC66', Outros:'#6B6B7D'};
-const CAT_SIGLA = {Papel:'PT', Quimico:'QM', Equipamento:'EQ', Descartavel:'DS', Outros:'OT'};
+const CAT_CORES = {'Papel':'#5B9BD5','Químico':'#6613D0','Quimico':'#6613D0','Equipamento':'#FE8F1C','Descartavel':'#1FAC66','Descartável':'#1FAC66','Outros':'#6B6B7D'};
 
 function renderLista(lista) {
   if(!lista.length) {
@@ -548,7 +547,8 @@ function renderLista(lista) {
     card.className = 'icard' + (baixo ? ' alerta' : '');
     card.onclick = function() { abrirModal(item); };
     var cor = CAT_CORES[item.categoria] || '#6B6B7D';
-    var sigla = CAT_SIGLA[item.categoria] || '??';
+    var idx_num = lista.indexOf(item);
+    var sigla = String(idx_num + 1).padStart(3, '0');
     var valorItem = ((item.saldo_atual||0) * (item.preco_unitario||0));
     var valorStr = valorItem > 0 ? 'R$ ' + valorItem.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}) : '';
     card.innerHTML =
@@ -730,18 +730,166 @@ async function carregarAbc() {
 }
 
 function renderAbc(d) {
-  const itens = d.itens || [];
-  const total = itens.length || 1;
-  const cA = itens.filter(function(i){ return i.classe==='A'; }).length;
-  const cB = itens.filter(function(i){ return i.classe==='B'; }).length;
-  const cC = itens.filter(function(i){ return i.classe==='C'; }).length;
-  let html = '<div class="vcard" style="margin-bottom:14px"><div class="v-eye">Valor total consumido</div><div class="v-val">R$ ' + fmtBR(d.total_valor_consumo||0) + '</div><div class="v-sub">Estoque atual: R$ ' + fmtBR(d.total_valor_estoque||0) + '</div></div>';
-  html += '<div class="abc-boxes"><div class="abc-box A"><div class="abc-l">A</div><div class="abc-eye">80% do valor</div><div class="abc-n">' + cA + '</div><div class="abc-s">itens</div></div><div class="abc-box B"><div class="abc-l">B</div><div class="abc-eye">15% do valor</div><div class="abc-n">' + cB + '</div><div class="abc-s">itens</div></div><div class="abc-box C"><div class="abc-l">C</div><div class="abc-eye">5% do valor</div><div class="abc-n">' + cC + '</div><div class="abc-s">itens</div></div></div>';
-  html += itens.map(function(it, i) {
-    return '<div class="abc-row"><span class="abc-rk">' + (i+1) + '</span><div class="abc-inf"><div class="abc-nm">' + (it.nome||'-') + '</div><div class="abc-vl">' + it.consumo_total + ' ' + (it.unidade||'') + ' R$ ' + fmtBR(it.valor_consumo) + '</div></div><span class="abc-bg ' + it.classe + '">' + it.classe + '</span></div>';
-  }).join('');
-  if(!itens.length) html += '<div class="empty"><div class="et">Sem movimentos ainda</div><div class="es">Registre saidas para calcular a curva</div></div>';
+  var itens = d.itens || [];
+  var cA = itens.filter(function(i){ return i.classe==='A'; }).length;
+  var cB = itens.filter(function(i){ return i.classe==='B'; }).length;
+  var cC = itens.filter(function(i){ return i.classe==='C'; }).length;
+  var totalEstoque = todosItens.reduce(function(s,i){ return s + (Number(i.saldo_atual)||0)*(Number(i.preco_unitario)||0); }, 0);
+
+  // Calcular Pareto pelo valor em estoque se não há movimentos
+  var usarEstoque = itens.length === 0;
+  var dadosPareto = usarEstoque
+    ? todosItens.filter(function(i){ return i.ativo !== 'false' && Number(i.preco_unitario) > 0; })
+        .map(function(i){ return { nome: i.nome, valor: (Number(i.saldo_atual)||0)*(Number(i.preco_unitario)||0), unidade: i.unidade||'' }; })
+        .filter(function(i){ return i.valor > 0; })
+        .sort(function(a,b){ return b.valor - a.valor; })
+    : itens.map(function(i){ return { nome: i.nome, valor: i.valor_consumo||0, unidade: i.unidade||'' }; });
+
+  var totalValor = dadosPareto.reduce(function(s,i){ return s + i.valor; }, 0);
+  var acum = 0;
+  dadosPareto.forEach(function(i){
+    acum += i.valor;
+    i.pct = totalValor > 0 ? (i.valor/totalValor*100) : 0;
+    i.acum = totalValor > 0 ? (acum/totalValor*100) : 0;
+    i.classe = i.acum <= 80 ? 'A' : i.acum <= 95 ? 'B' : 'C';
+  });
+
+  var html = '<div class="vcard" style="margin-bottom:14px">';
+  html += '<div class="v-eye">' + (usarEstoque ? 'Valor total em estoque' : 'Valor total consumido') + '</div>';
+  html += '<div class="v-val">R$ ' + fmtBR(usarEstoque ? totalEstoque : (d.total_valor_consumo||0)) + '</div>';
+  html += '</div>';
+
+  // Cards ABC
+  var cAp = dadosPareto.filter(function(i){ return i.classe==='A'; }).length;
+  var cBp = dadosPareto.filter(function(i){ return i.classe==='B'; }).length;
+  var cCp = dadosPareto.filter(function(i){ return i.classe==='C'; }).length;
+  html += '<div class="abc-boxes"><div class="abc-box A"><div class="abc-l">A</div><div class="abc-eye">80% do valor</div><div class="abc-n">' + cAp + '</div><div class="abc-s">itens</div></div>';
+  html += '<div class="abc-box B"><div class="abc-l">B</div><div class="abc-eye">15% do valor</div><div class="abc-n">' + cBp + '</div><div class="abc-s">itens</div></div>';
+  html += '<div class="abc-box C"><div class="abc-l">C</div><div class="abc-eye">5% do valor</div><div class="abc-n">' + cCp + '</div><div class="abc-s">itens</div></div></div>';
+
+  // Canvas Pareto
+  html += '<div style="background:#fff;border-radius:16px;padding:16px;margin-bottom:14px;border:1px solid var(--lx-border);box-shadow:var(--lx-shadow-sm);">';
+  html += '<div style="font-size:12px;font-weight:600;color:var(--lx-fg-muted);margin-bottom:10px;">Gráfico de Pareto — Top 15 itens por valor</div>';
+  html += '<canvas id="pareto-canvas" style="width:100%;max-height:280px;"></canvas>';
+  html += '</div>';
+
+  // Tabela
+  html += '<div style="background:#fff;border-radius:16px;padding:16px;border:1px solid var(--lx-border);box-shadow:var(--lx-shadow-sm);">';
+  html += '<div style="font-size:12px;font-weight:600;color:var(--lx-fg-muted);margin-bottom:10px;">Ranking completo</div>';
+  dadosPareto.forEach(function(it, i) {
+    html += '<div class="abc-row"><span class="abc-rk">' + (i+1) + '</span>' +
+      '<div class="abc-inf"><div class="abc-nm">' + (it.nome||'-') + '</div>' +
+      '<div class="abc-vl">R$ ' + fmtBR(it.valor) + ' · ' + it.pct.toFixed(1) + '% · acum. ' + it.acum.toFixed(1) + '%</div></div>' +
+      '<span class="abc-bg ' + it.classe + '">' + it.classe + '</span></div>';
+  });
+  if(!dadosPareto.length) html += '<div class="empty"><div class="et">Sem dados</div></div>';
+  html += '</div>';
+
   document.getElementById('abc-content').innerHTML = html;
+
+  // Desenhar gráfico Pareto
+  setTimeout(function() {
+    var canvas = document.getElementById('pareto-canvas');
+    if (!canvas) return;
+    var top = dadosPareto.slice(0, 15);
+    var dpr = window.devicePixelRatio || 1;
+    var W = canvas.parentElement.clientWidth - 32;
+    var H = 240;
+    canvas.width = W * dpr;
+    canvas.height = H * dpr;
+    canvas.style.width = W + 'px';
+    canvas.style.height = H + 'px';
+    var ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+
+    var pad = { t: 20, r: 50, b: 60, l: 60 };
+    var cW = W - pad.l - pad.r;
+    var cH = H - pad.t - pad.b;
+    var barW = cW / top.length * 0.7;
+    var gap = cW / top.length;
+    var maxVal = top[0] ? top[0].valor : 1;
+
+    // Fundo
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0, 0, W, H);
+
+    // Grid horizontal
+    ctx.strokeStyle = '#E4E1F0';
+    ctx.lineWidth = 1;
+    [0, 25, 50, 75, 100].forEach(function(pct) {
+      var y = pad.t + cH - (pct/100 * cH);
+      ctx.beginPath(); ctx.moveTo(pad.l, y); ctx.lineTo(W - pad.r, y); ctx.stroke();
+      ctx.fillStyle = '#6B6B7D';
+      ctx.font = '9px system-ui';
+      ctx.textAlign = 'right';
+      ctx.fillText(pct + '%', pad.l - 6, y + 3);
+    });
+
+    // Barras
+    top.forEach(function(it, i) {
+      var x = pad.l + i * gap + (gap - barW) / 2;
+      var barH = (it.valor / maxVal) * cH;
+      var y = pad.t + cH - barH;
+      var cor = it.classe === 'A' ? '#C70404' : it.classe === 'B' ? '#FE8F1C' : '#1FAC66';
+      ctx.fillStyle = cor;
+      ctx.beginPath();
+      ctx.roundRect ? ctx.roundRect(x, y, barW, barH, [4, 4, 0, 0]) : ctx.rect(x, y, barW, barH);
+      ctx.fill();
+
+      // Label do eixo X
+      ctx.fillStyle = '#6B6B7D';
+      ctx.font = '8px system-ui';
+      ctx.textAlign = 'center';
+      var label = (it.nome||'').split(' ').slice(0,2).join(' ');
+      ctx.save();
+      ctx.translate(x + barW/2, pad.t + cH + 8);
+      ctx.rotate(-Math.PI/4);
+      ctx.fillText(label, 0, 0);
+      ctx.restore();
+    });
+
+    // Linha de Pareto (% acumulada)
+    ctx.strokeStyle = '#2D085D';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    top.forEach(function(it, i) {
+      var x = pad.l + i * gap + gap / 2;
+      var y = pad.t + cH - (it.acum / 100 * cH);
+      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+
+    // Pontos na linha
+    top.forEach(function(it, i) {
+      var x = pad.l + i * gap + gap / 2;
+      var y = pad.t + cH - (it.acum / 100 * cH);
+      ctx.fillStyle = '#2D085D';
+      ctx.beginPath();
+      ctx.arc(x, y, 3, 0, Math.PI*2);
+      ctx.fill();
+    });
+
+    // Eixo Y direito (% acumulada)
+    ctx.fillStyle = '#2D085D';
+    ctx.font = '9px system-ui';
+    ctx.textAlign = 'left';
+    [0, 25, 50, 75, 100].forEach(function(pct) {
+      var y = pad.t + cH - (pct/100 * cH);
+      ctx.fillText(pct + '%', W - pad.r + 6, y + 3);
+    });
+
+    // Legenda
+    ctx.font = '10px system-ui';
+    ctx.fillStyle = '#C70404'; ctx.fillRect(pad.l, 4, 10, 8);
+    ctx.fillStyle = '#6B6B7D'; ctx.fillText('Classe A', pad.l + 14, 12);
+    ctx.fillStyle = '#FE8F1C'; ctx.fillRect(pad.l + 60, 4, 10, 8);
+    ctx.fillStyle = '#6B6B7D'; ctx.fillText('Classe B', pad.l + 74, 12);
+    ctx.fillStyle = '#1FAC66'; ctx.fillRect(pad.l + 120, 4, 10, 8);
+    ctx.fillStyle = '#6B6B7D'; ctx.fillText('Classe C', pad.l + 134, 12);
+    ctx.strokeStyle = '#2D085D'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(pad.l + 180, 8); ctx.lineTo(pad.l + 190, 8); ctx.stroke();
+    ctx.fillStyle = '#2D085D'; ctx.fillText('% acum.', pad.l + 194, 12);
+  }, 100);
 }
 
 async function cadastrarItem() {
