@@ -723,10 +723,9 @@ function cancelarVoz() {
 
 async function carregarAbc() {
   document.getElementById('abc-content').innerHTML = '<div class="spin-wrap"><div class="spin"></div><span>Calculando...</span></div>';
-  try {
-    const d = await api('/limpeza-curva-abc');
-    renderAbc(d);
-  } catch(e) { document.getElementById('abc-content').innerHTML = '<div class="empty"><div class="et">Erro ao carregar</div></div>'; }
+  // Garantir itens carregados
+  if (!todosItens.length) { await carregarItens(); }
+  renderAbc({});
 }
 
 function renderAbc(d) {
@@ -737,13 +736,11 @@ function renderAbc(d) {
   var totalEstoque = todosItens.reduce(function(s,i){ return s + (Number(i.saldo_atual)||0)*(Number(i.preco_unitario)||0); }, 0);
 
   // Calcular Pareto pelo valor em estoque se não há movimentos
-  var usarEstoque = itens.length === 0;
-  var dadosPareto = usarEstoque
-    ? todosItens.filter(function(i){ return i.ativo !== 'false' && Number(i.preco_unitario) > 0; })
-        .map(function(i){ return { nome: i.nome, valor: (Number(i.saldo_atual)||0)*(Number(i.preco_unitario)||0), unidade: i.unidade||'' }; })
-        .filter(function(i){ return i.valor > 0; })
-        .sort(function(a,b){ return b.valor - a.valor; })
-    : itens.map(function(i){ return { nome: i.nome, valor: i.valor_consumo||0, unidade: i.unidade||'' }; });
+  var dadosPareto = todosItens
+    .filter(function(i){ return i.ativo !== 'false' && i.nome !== 'DELETADO' && Number(i.preco_unitario) > 0; })
+    .map(function(i){ return { nome: i.nome, valor: (Number(i.saldo_atual)||0)*(Number(i.preco_unitario)||0), unidade: i.unidade||'' }; })
+    .filter(function(i){ return i.valor > 0; })
+    .sort(function(a,b){ return b.valor - a.valor; });
 
   var totalValor = dadosPareto.reduce(function(s,i){ return s + i.valor; }, 0);
   var acum = 0;
@@ -755,8 +752,9 @@ function renderAbc(d) {
   });
 
   var html = '<div class="vcard" style="margin-bottom:14px">';
-  html += '<div class="v-eye">' + (usarEstoque ? 'Valor total em estoque' : 'Valor total consumido') + '</div>';
-  html += '<div class="v-val">R$ ' + fmtBR(usarEstoque ? totalEstoque : (d.total_valor_consumo||0)) + '</div>';
+  html += '<div class="v-eye">Valor total em estoque</div>';
+  html += '<div class="v-val">R$ ' + fmtBR(totalEstoque) + '</div>';
+  html += '<div class="v-sub">' + dadosPareto.length + ' itens com saldo</div>';
   html += '</div>';
 
   // Cards ABC
