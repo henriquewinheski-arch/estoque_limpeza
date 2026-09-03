@@ -550,7 +550,8 @@ html,body{height:100%;font-family:var(--lx-font-body);background:var(--lx-off-wh
   }
 
   function salvarSessao(idToken, payload){
-    // Sessão não é salva — sempre pede login
+    localStorage.setItem('lx_tok', idToken);
+    localStorage.setItem('lx_tok_exp', payload.exp);
   }
 
   function limparSessaoSalva(){
@@ -588,7 +589,24 @@ html,body{height:100%;font-family:var(--lx-font-body);background:var(--lx-off-wh
   }
 
   window.addEventListener("load", async function(){
-    limparSessaoSalva();
+    // Verificar sessão salva primeiro
+    var savedToken = localStorage.getItem('lx_tok');
+    var savedExp = localStorage.getItem('lx_tok_exp');
+    if (savedToken && savedExp && (Date.now() / 1000) < Number(savedExp)) {
+      try {
+        var payload = decodeJwt(savedToken);
+        if (payload.email && payload.email.endsWith('@logcomex.com')) {
+          document.getElementById("screen-app").style.display = "flex";
+          userEmail = payload.email;
+          userName = payload.name || '';
+          document.getElementById("user-avatar").textContent = payload.name ? payload.name[0].toUpperCase() : "?";
+          carregarItens();
+          return;
+        }
+      } catch(e) {}
+    }
+    localStorage.removeItem('lx_tok');
+    localStorage.removeItem('lx_tok_exp');
     const veioDoLogin = await processarLoginCallback();
     if (veioDoLogin) return;
     document.getElementById("loginGate").classList.add("show");
