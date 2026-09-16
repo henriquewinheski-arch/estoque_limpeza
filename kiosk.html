@@ -422,7 +422,7 @@ html, body { height: 100%; font-family: var(--font); background: #0B0D19; color:
 .btn-mic-global svg { width: 32px; height: 32px; color: #fff; stroke-width: 2; }
 .voz-global-transcript {
   font-size: 16px; font-style: italic; color: #fff;
-  text-align: center; display: none; max-width: 360px;
+  text-align: center; max-width: 360px; min-height: 24px;
 }
 .voz-global-confirm {
   background: rgba(255,255,255,0.08);
@@ -937,6 +937,141 @@ function toast(msg, tipo) {
 
 
 
+
+// ── VOZ GLOBAL ──
+var vozGlobalGravando = false;
+var vozGlobalRec = null;
+var vozGlobalChunks = [];
+var vozGlobalParsed = null;
+
+function abrirVozGlobal() {
+  var overlay = document.getElementById('voz-global-overlay');
+  overlay.classList.add('open');
+  document.getElementById('voz-global-transcript').textContent = '';
+  document.getElementById('voz-global-confirm').style.display = 'none';
+  resetarBtnMicGlobal();
+}
+
+function fecharVozGlobal() {
+  pararGravacaoGlobal();
+  document.getElementById('voz-global-overlay').classList.remove('open');
+  vozGlobalParsed = null;
+}
+
+function resetarBtnMicGlobal() {
+  var btn = document.getElementById('btn-mic-global');
+  btn.classList.remove('gravando');
+  btn.querySelector('span') && (btn.querySelector('span').textContent = '');
+}
+
+async function toggleVozGlobal() {
+  if (vozGlobalGravando) pararGravacaoGlobal();
+  else await iniciarGravacaoGlobal();
+}
+
+async function iniciarGravacaoGlobal() {
+  try {
+    var stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    vozGlobalChunks = [];
+    vozGlobalRec = new MediaRecorder(stream);
+    vozGlobalRec.ondataavailable = function(e) { if (e.data.size > 0) vozGlobalChunks.push(e.data); };
+    vozGlobalRec.onstop = processarAudioGlobal;
+    vozGlobalRec.start();
+    vozGlobalGravando = true;
+    var btn = document.getElementById('btn-mic-global');
+    btn.classList.add('gravando');
+    document.getElementById('voz-global-transcript').textContent = 'Gravando... toque para parar';
+    document.getElementById('voz-global-confirm').style.display = 'none';
+  } catch(e) { toast('Microfone não disponível', 'err'); }
+}
+
+function pararGravacaoGlobal() {
+  if (vozGlobalRec && vozGlobalGravando) {
+    vozGlobalRec.stop();
+    vozGlobalRec.stream.getTracks().forEach(function(t) { t.stop(); });
+    vozGlobalGravando = false;
+    var btn = document.getElementById('btn-mic-global');
+    btn.classList.remove('gravando');
+    document.getElementById('voz-global-transcript').textContent = 'Processando...';
+  }
+}
+
+async function processarAudioGlobal() {
+  var blob = new Blob(vozGlobalChunks, { type: 'audio/webm' });
+  var reader = new FileReader();
+  reader.readAsDataURL(blob);
+  reader.onloadend = async function() {
+    var b64 = reader.result.split(',')[1];
+    try {
+      var r = await api('/limpeza-voz', {
+        method: 'POST',
+        body: JSON.stringify({
+          audio: b64,
+          item_id: '',
+          item_nome: '',
+          usuario: usuarioAtual ? usuarioAtual.email : '',
+          catalogo: todosItens.map(function(i){ return i.item_id + '|' + i.nome; }).join('\n')
+        })
+      });
+      if (r.ok && r.intencao) {
+        vozGlobalParsed = r.intencao;
+        // Encontrar o item pelo item_id retornado
+        var itemEncontrado = todosItens.find(function(i){ return i.item_id === r.intencao.item_id; });
+        var nomeItem = itemEncontrado ? itemEncontrado.nome : (r.intencao.item_nome || r.intencao.item_id || '?');
+        document.getElementById('voz-global-transcript').textContent = '"' + (r.transcricao || '') + '"';
+        document.getElementById('vg-item').textContent = nomeItem;
+        document.getElementById('vg-tipo').textContent = r.intencao.tipo === 'entrada' ? '📥 Entrada' : '📤 Saída';
+        document.getElementById('vg-qty').textContent = r.intencao.quantidade + (itemEncontrado ? ' ' + itemEncontrado.unidade : '');
+        document.getElementById('voz-global-confirm').style.display = 'block';
+        // Destacar o item na lista
+        if (itemEncontrado) {
+          document.getElementById('search-input').value = itemEncontrado.nome;
+          filtrar();
+        }
+      } else {
+        document.getElementById('voz-global-transcript').textContent = 'Não entendi — tente novamente';
+      }
+    } catch(e) {
+      document.getElementById('voz-global-transcript').textContent = 'Erro ao processar — tente novamente';
+    }
+  };
+}
+
+function cancelarVozGlobal() {
+  vozGlobalParsed = null;
+  document.getElementById('voz-global-confirm').style.display = 'none';
+  document.getElementById('voz-global-transcript').textContent = '';
+  resetarBtnMicGlobal();
+}
+
+async function confirmarVozGlobal() {
+  if (!vozGlobalParsed) return;
+  var btn = document.querySelector('.btn-ok-g');
+  btn.disabled = true; btn.textContent = 'Registrando...';
+  try {
+    var r = await api('/limpeza-movimento', {
+      method: 'POST',
+      body: JSON.stringify({
+        item_id: vozGlobalParsed.item_id,
+        tipo: vozGlobalParsed.tipo,
+        quantidade: vozGlobalParsed.quantidade,
+        usuario: usuarioAtual ? usuarioAtual.email : '',
+        origem: 'voz',
+        observacao: vozGlobalParsed.observacao || ''
+      })
+    });
+    if (r.ok) {
+      toast('Registrado por voz!', 'ok');
+      fecharVozGlobal();
+      // Limpar busca e recarregar
+      document.getElementById('search-input').value = '';
+      await carregarItens();
+    } else {
+      toast('Erro ao registrar', 'err');
+    }
+  } catch(e) { toast('Erro: ' + e.message, 'err'); }
+  finally { btn.disabled = false; btn.textContent = 'Confirmar'; }
+}
 
 var showingPareto = false;
 
