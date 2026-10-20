@@ -435,6 +435,21 @@ html, body { height: 100%; font-family: var(--font); background: #0B0D19; color:
 .voz-global-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 14px; }
 .btn-cancelar-g { padding: 14px; background: rgba(255,255,255,0.1); color: #fff; border: none; border-radius: 12px; font-family: var(--font); font-size: 14px; font-weight: 600; cursor: pointer; }
 .btn-ok-g { padding: 14px; background: var(--purple2); color: #fff; border: none; border-radius: 12px; font-family: var(--font); font-size: 15px; font-weight: 700; cursor: pointer; }
+#voz-global-confirm { max-height: 55vh; overflow-y: auto; }
+.vg-card { background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.15); border-radius: 12px; padding: 12px; margin-bottom: 10px; }
+.vg-card.vg-duvida { border-color: #F5B83D; }
+.vg-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.vg-nome { color: #fff; font-weight: 700; font-size: 16px; }
+.vg-x { background: none; border: none; color: rgba(255,255,255,0.6); font-size: 16px; cursor: pointer; }
+.vg-aviso { color: #F5B83D; font-size: 13px; margin-top: 6px; }
+.vg-alts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.vg-chip { padding: 8px 12px; border-radius: 999px; border: 1px solid rgba(255,255,255,0.35); background: rgba(255,255,255,0.1); color: #fff; font-family: var(--font); font-size: 13px; cursor: pointer; margin-top: 8px; }
+.vg-alts .vg-chip { margin-top: 0; }
+.vg-sel { width: 100%; margin-top: 8px; padding: 10px; border-radius: 10px; font-family: var(--font); font-size: 14px; }
+.vg-ctl { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; gap: 8px; }
+.vg-tipo { padding: 8px 12px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.35); background: rgba(255,255,255,0.1); color: #fff; font-family: var(--font); font-size: 14px; cursor: pointer; }
+.vg-qtd { display: flex; align-items: center; gap: 10px; color: #fff; font-weight: 700; }
+.vg-qtd button { width: 36px; height: 36px; border-radius: 50%; border: none; background: rgba(255,255,255,0.15); color: #fff; font-size: 20px; cursor: pointer; }
 .btn-fechar-voz { position: absolute; top: 20px; right: 20px; background: rgba(255,255,255,0.1); border: none; border-radius: 50%; width: 36px; height: 36px; color: #fff; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 18px; }
 
 
@@ -616,15 +631,13 @@ html, body { height: 100%; font-family: var(--font); background: #0B0D19; color:
 <div id="voz-global-overlay" style="position:fixed;">
   <button class="btn-fechar-voz" onclick="fecharVozGlobal()">✕</button>
   <div class="voz-global-titulo">Diga o que precisa registrar</div>
-  <div class="voz-global-dica">"entrada de 10 detergentes"<br>"5 sabão de louça"<br>"saída de 3 papel toalha"</div>
+  <div class="voz-global-dica">"entrada de 10 detergentes"<br>"5 sabão de louça"<br>"saída de 3 papel toalha"<br>"2 detergente e 1 álcool"</div>
   <button class="btn-mic-global" id="btn-mic-global" onclick="toggleVozGlobal()">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/></svg>
   </button>
   <div class="voz-global-transcript" id="voz-global-transcript"></div>
   <div class="voz-global-confirm" id="voz-global-confirm">
-    <div class="vc-linha"><span class="vc-lbl">Item</span><span class="vc-val" id="vg-item">—</span></div>
-    <div class="vc-linha"><span class="vc-lbl">Tipo</span><span class="vc-val" id="vg-tipo">—</span></div>
-    <div class="vc-linha"><span class="vc-lbl">Quantidade</span><span class="vc-val" id="vg-qty">—</span></div>
+    <div id="vg-itens"></div>
     <div class="voz-global-btns">
       <button class="btn-cancelar-g" onclick="cancelarVozGlobal()">Refazer</button>
       <button class="btn-ok-g" onclick="confirmarVozGlobal()">Confirmar</button>
@@ -956,6 +969,7 @@ function fecharVozGlobal() {
   pararGravacaoGlobal();
   document.getElementById('voz-global-overlay').classList.remove('open');
   vozGlobalParsed = null;
+  vozGlobalItens = [];
 }
 
 function resetarBtnMicGlobal() {
@@ -996,6 +1010,109 @@ function pararGravacaoGlobal() {
   }
 }
 
+var vozGlobalItens = [];
+
+function vgInfo(id) { return todosItens.find(function(i){ return i.item_id === id; }) || null; }
+
+function vgEl(tag, cls, txt) {
+  var e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (txt != null) e.textContent = txt;
+  return e;
+}
+
+function vgMontarItens(r) {
+  var lista = (r.itens && r.itens.length) ? r.itens : (r.intencao ? [r.intencao] : []);
+  return lista.map(function(it) {
+    var cands = (it.candidatos || []).map(function(c){ return c.item_id; }).filter(function(id){ return vgInfo(id); });
+    var id = (it.item_id && vgInfo(it.item_id)) ? it.item_id : (cands[0] || '');
+    if (id && cands.indexOf(id) < 0) cands.unshift(id);
+    return {
+      item_id: id,
+      tipo: it.tipo === 'entrada' ? 'entrada' : 'saida',
+      quantidade: Math.max(1, parseInt(it.quantidade, 10) || 1),
+      observacao: it.observacao || '',
+      candidatos: cands,
+      termo: it.termo_ouvido || '',
+      confirmar: !!it.precisa_confirmar || !id,
+      trocar: false
+    };
+  });
+}
+
+function vgEscolher(idx, id) {
+  var it = vozGlobalItens[idx];
+  it.item_id = id;
+  if (it.candidatos.indexOf(id) < 0) it.candidatos.push(id);
+  it.confirmar = false;
+  it.trocar = false;
+  vgRender();
+}
+
+function vgRemover(idx) {
+  vozGlobalItens.splice(idx, 1);
+  if (!vozGlobalItens.length) cancelarVozGlobal(); else vgRender();
+}
+
+function vgRender() {
+  var box = document.getElementById('vg-itens');
+  box.innerHTML = '';
+  vozGlobalItens.forEach(function(it, idx) {
+    var info = vgInfo(it.item_id);
+    var card = vgEl('div', 'vg-card' + (it.confirmar ? ' vg-duvida' : ''));
+    var top = vgEl('div', 'vg-top');
+    top.appendChild(vgEl('div', 'vg-nome', info ? info.nome : 'Escolha o item'));
+    if (vozGlobalItens.length > 1) {
+      var x = vgEl('button', 'vg-x', '✕');
+      x.onclick = function() { vgRemover(idx); };
+      top.appendChild(x);
+    }
+    card.appendChild(top);
+    if (it.confirmar) {
+      card.appendChild(vgEl('div', 'vg-aviso', it.termo ? 'Ouvi "' + it.termo + '" — confirme o item:' : 'Confirme o item:'));
+    }
+    var alts = it.candidatos.filter(function(id){ return id !== it.item_id; });
+    if (alts.length) {
+      var row = vgEl('div', 'vg-alts');
+      alts.forEach(function(id) {
+        var b = vgEl('button', 'vg-chip', vgInfo(id).nome);
+        b.onclick = function() { vgEscolher(idx, id); };
+        row.appendChild(b);
+      });
+      card.appendChild(row);
+    }
+    var tr = vgEl('button', 'vg-chip', it.trocar ? 'Fechar lista' : 'Outro item…');
+    tr.onclick = function() { it.trocar = !it.trocar; vgRender(); };
+    card.appendChild(tr);
+    if (it.trocar) {
+      var sel = vgEl('select', 'vg-sel');
+      var o0 = vgEl('option', null, 'Escolher item…'); o0.value = ''; sel.appendChild(o0);
+      todosItens.slice().sort(function(a, b){ return String(a.nome).localeCompare(String(b.nome), 'pt-BR'); }).forEach(function(i) {
+        var o = vgEl('option', null, i.nome); o.value = i.item_id;
+        if (i.item_id === it.item_id) o.selected = true;
+        sel.appendChild(o);
+      });
+      sel.onchange = function() { if (sel.value) vgEscolher(idx, sel.value); };
+      card.appendChild(sel);
+    }
+    var ctl = vgEl('div', 'vg-ctl');
+    var tp = vgEl('button', 'vg-tipo', it.tipo === 'entrada' ? '📥 Entrada' : '📤 Saída');
+    tp.onclick = function() { it.tipo = (it.tipo === 'entrada') ? 'saida' : 'entrada'; vgRender(); };
+    ctl.appendChild(tp);
+    var q = vgEl('div', 'vg-qtd');
+    var mn = vgEl('button', null, '−');
+    mn.onclick = function() { if (it.quantidade > 1) { it.quantidade--; vgRender(); } };
+    var mx = vgEl('button', null, '+');
+    mx.onclick = function() { it.quantidade++; vgRender(); };
+    q.appendChild(mn);
+    q.appendChild(vgEl('span', null, it.quantidade + (info && info.unidade ? ' ' + info.unidade : '')));
+    q.appendChild(mx);
+    ctl.appendChild(q);
+    card.appendChild(ctl);
+    box.appendChild(card);
+  });
+}
+
 async function processarAudioGlobal() {
   var blob = new Blob(vozGlobalChunks, { type: 'audio/webm' });
   var reader = new FileReader();
@@ -1013,19 +1130,14 @@ async function processarAudioGlobal() {
           catalogo: todosItens.map(function(i){ return i.item_id + '|' + i.nome; }).join('\n')
         })
       });
-      if (r.ok && r.intencao) {
-        vozGlobalParsed = r.intencao;
-        // Encontrar o item pelo item_id retornado
-        var itemEncontrado = todosItens.find(function(i){ return i.item_id === r.intencao.item_id; });
-        var nomeItem = itemEncontrado ? itemEncontrado.nome : (r.intencao.item_nome || r.intencao.item_id || '?');
+      if (r.ok && (r.itens || r.intencao)) {
+        vozGlobalItens = vgMontarItens(r);
+        vozGlobalParsed = r.intencao || vozGlobalItens[0] || null;
         document.getElementById('voz-global-transcript').textContent = '"' + (r.transcricao || '') + '"';
-        document.getElementById('vg-item').textContent = nomeItem;
-        document.getElementById('vg-tipo').textContent = r.intencao.tipo === 'entrada' ? '📥 Entrada' : '📤 Saída';
-        document.getElementById('vg-qty').textContent = r.intencao.quantidade + (itemEncontrado ? ' ' + itemEncontrado.unidade : '');
+        vgRender();
         document.getElementById('voz-global-confirm').style.display = 'block';
-        // Destacar o item na lista
-        if (itemEncontrado) {
-          document.getElementById('search-input').value = itemEncontrado.nome;
+        if (vozGlobalItens.length === 1 && vgInfo(vozGlobalItens[0].item_id)) {
+          document.getElementById('search-input').value = vgInfo(vozGlobalItens[0].item_id).nome;
           filtrar();
         }
       } else {
@@ -1039,38 +1151,47 @@ async function processarAudioGlobal() {
 
 function cancelarVozGlobal() {
   vozGlobalParsed = null;
+  vozGlobalItens = [];
   document.getElementById('voz-global-confirm').style.display = 'none';
   document.getElementById('voz-global-transcript').textContent = '';
   resetarBtnMicGlobal();
 }
 
 async function confirmarVozGlobal() {
-  if (!vozGlobalParsed) return;
+  if (!vozGlobalItens.length) return;
+  for (var k = 0; k < vozGlobalItens.length; k++) {
+    if (!vozGlobalItens[k].item_id) { toast('Escolha o item antes de confirmar', 'err'); return; }
+  }
   var btn = document.querySelector('.btn-ok-g');
   btn.disabled = true; btn.textContent = 'Registrando...';
+  var ok = 0, falhas = 0;
   try {
-    var r = await api('/limpeza-movimento', {
-      method: 'POST',
-      body: JSON.stringify({
-        item_id: vozGlobalParsed.item_id,
-        tipo: vozGlobalParsed.tipo,
-        quantidade: vozGlobalParsed.quantidade,
-        usuario: usuarioAtual ? usuarioAtual.email : '',
-        origem: 'voz',
-        observacao: vozGlobalParsed.observacao || ''
-      })
-    });
-    if (r.ok) {
-      toast('Registrado por voz!', 'ok');
+    for (var i = 0; i < vozGlobalItens.length; i++) {
+      var it = vozGlobalItens[i];
+      try {
+        var r = await api('/limpeza-movimento', {
+          method: 'POST',
+          body: JSON.stringify({
+            item_id: it.item_id,
+            tipo: it.tipo,
+            quantidade: it.quantidade,
+            usuario: usuarioAtual ? usuarioAtual.email : '',
+            origem: 'voz',
+            observacao: it.observacao || ''
+          })
+        });
+        if (r.ok) ok++; else falhas++;
+      } catch(e) { falhas++; }
+    }
+    if (ok && !falhas) toast(ok > 1 ? ok + ' itens registrados por voz!' : 'Registrado por voz!', 'ok');
+    else if (ok) toast(ok + ' registrado(s), ' + falhas + ' com erro — confira o histórico', 'err');
+    else toast('Erro ao registrar', 'err');
+    if (ok) {
       fecharVozGlobal();
-      // Limpar busca e recarregar
       document.getElementById('search-input').value = '';
       await carregarItens();
-    } else {
-      toast('Erro ao registrar', 'err');
     }
-  } catch(e) { toast('Erro: ' + e.message, 'err'); }
-  finally { btn.disabled = false; btn.textContent = 'Confirmar'; }
+  } finally { btn.disabled = false; btn.textContent = 'Confirmar'; }
 }
 
 var showingPareto = false;
